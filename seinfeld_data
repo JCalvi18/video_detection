@@ -33,6 +33,6 @@ cd ..
 youtube-dl -f best https://www.youtube.com/watch?v=QOrYKxfPUto --output 'seinfeld.mp4'
 if [ "$#" -gt 1 ]; then
 	mv seinfeld.mp4 totrim.mp4
-	ffmpeg -i totrim.mp4 -ss 00:00:24 -t "00:00:0$2" -async 1 seinfeld.mp4
+	ffmpeg -i totrim.mp4 -ss 00:00:24 -t "00:00:$2" -async 1 seinfeld.mp4
 	rm totrim.mp4
 fi
