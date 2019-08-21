@@ -20,7 +20,7 @@ parser.add_argument('--gpu', type=int, default=0)
 parser.add_argument('--det', type=int, default=0)
 parser.add_argument('--flip', type=int, default=0)
 parser.add_argument('--threshold', type=float, default=1.24)
-parser.add_argument('--threshold-face', type=float, default=0.6)
+parser.add_argument('--threshold-face', type=float, default=0.4)
 parser.add_argument('--prepare', action='store_true', help='This is a boolean')
 
 
@@ -67,7 +67,7 @@ def draw_names(frame, names):
                 # cv2.putText(frame, 'unknown', (int(b[0]),int(b[1])), cv2.FONT_HERSHEY_COMPLEX_SMALL, 2, (255, 255, 255), 2, cv2.LINE_AA)
         else:
             cv2.rectangle(frame, (int(b[0]), int(b[1])), (int(b[2]), int(b[3])), c, 2)
-            cv2.putText(frame, name, (int(b[0]), int(b[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(frame, name, (int(b[0]), int(b[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 3, cv2.LINE_AA)
 
     return frame
 
@@ -86,7 +86,10 @@ def name_faces(args, frame, model, detector, dataset_features):
         faces_names = {}
         unknown_faces = []
         for person, box in zip(persons, total_boxes):
-            face = model.get_feature(model.get_input(person))
+            face = model.get_input(person)
+            if face is None:
+                continue
+            face = model.get_feature(face)
             scores = {}
             for known_id, known_features in dataset_features.items():
                 # minimum distance of all the features of a particular id
@@ -130,12 +133,13 @@ if __name__ == '__main__':
         for _ in tqdm(range(total_frames)):
             ret, frame = cap.read()
             if ret:
-                render.append(name_faces(args, frame, model, detector, dataset_features))
+                r = name_faces(args, frame, model, detector, dataset_features)
+                render.append(r)
         cap.release()
 
-        print('Rendering Output')
+
         out = cv2.VideoWriter(args.out_file, cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), 30, (frame_w, frame_h))
-        for v in tqdm(render):
+        for v in render:
             out.write(v)
         out.release()
         print('Video saved on:{}'.format(os.path.abspath(args.out_file)))

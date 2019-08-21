@@ -30,9 +30,9 @@ wget https://thecomedycrowd.com/wp-content/uploads/2017/11/elaine-benes.png --ou
 wget https://img.huffingtonpost.com/asset/5bb66da31f0000df0024c360.jpeg?ops=scalefit_720_noupscale --output-document elaine_04.jpg
 
 cd ..
-youtube-dl -f 247 https://www.youtube.com/watch?v=nc_f-0DCGI0 --output 'seinfeld.mp4'
+youtube-dl -f best https://www.youtube.com/watch?v=QOrYKxfPUto --output 'seinfeld.mp4'
 if [ "$#" -gt 1 ]; then
 	mv seinfeld.mp4 totrim.mp4
-	ffmpeg -i totrim.mp4 -ss 00:00:00 -t "00:00:0$2" -async 1 seinfeld.mp4
+	ffmpeg -i totrim.mp4 -ss 00:00:24 -t "00:00:0$2" -async 1 seinfeld.mp4
 	rm totrim.mp4
 fi
