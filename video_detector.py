@@ -11,10 +11,18 @@ from tqdm import tqdm
 
 parser = argparse.ArgumentParser('Prepare faces dataset')
 parser.add_argument('--image-size', type=str, default='112,112')
-parser.add_argument('--faces-dir', type=str, default='../resources/seinfeld/imgs')
+
+#parser.add_argument('--faces-dir', type=str, default='../resources/seinfeld/imgs')
+parser.add_argument('--faces-dir', type=str, default='../resources/faces')
+
 parser.add_argument('--model', type=str, default='../models/model-r100-ii/model,0')
-parser.add_argument('--in-file', type=str, default='../resources/seinfeld/seinfeld.mp4')
-parser.add_argument('--out-file', type=str, default='../resources/seinfeld/face_seinfeld.mp4')
+
+#parser.add_argument('--in-file', type=str, default='../resources/seinfeld/seinfeld.mp4')
+parser.add_argument('--in-file', type=str, default='../resources/variete.mp4')
+
+#parser.add_argument('--out-file', type=str, default='../resources/seinfeld/face_seinfeld.mp4')
+parser.add_argument('--out-file', type=str, default='../resources/seinfeld/face_variete.mp4')
+
 parser.add_argument('--ga-model', type=str, default='')
 parser.add_argument('--gpu', type=int, default=0)
 parser.add_argument('--det', type=int, default=0)
@@ -143,7 +151,3 @@ if __name__ == '__main__':
             out.write(v)
         out.release()
         print('Video saved on:{}'.format(os.path.abspath(args.out_file)))
-
-
-
-
