@@ -21,7 +21,7 @@ parser.add_argument('--model', type=str, default='../models/model-r100-ii/model,
 parser.add_argument('--in-file', type=str, default='../resources/variete.mp4')
 
 #parser.add_argument('--out-file', type=str, default='../resources/seinfeld/face_seinfeld.mp4')
-parser.add_argument('--out-file', type=str, default='../resources/seinfeld/face_variete.mp4')
+parser.add_argument('--out-file', type=str, default='../resources/face_variete.mp4')
 
 parser.add_argument('--ga-model', type=str, default='')
 parser.add_argument('--gpu', type=int, default=0)
