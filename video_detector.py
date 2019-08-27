@@ -146,7 +146,7 @@ if __name__ == '__main__':
         cap.release()
 
 
-        out = cv2.VideoWriter(args.out_file, cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), 30, (frame_w, frame_h))
+        out = cv2.VideoWriter(args.out_file, cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), 15, (frame_w, frame_h))
         for v in render:
             out.write(v)
         out.release()
