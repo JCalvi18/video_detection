@@ -1,4 +1,5 @@
 import mxnet as mx
+from mxnet import nd
 from mtcnn_detector import MtcnnDetector
 import face_model
 import cv2
@@ -8,6 +9,7 @@ import argparse
 import pickle
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from time import time
 
 parser = argparse.ArgumentParser('Face recognition and verification using Insightface')
 parser.add_argument('--image-size', type=str, default='112,112')
@@ -16,13 +18,13 @@ parser.add_argument('--model', type=str, default='../models/model-r100-ii/model,
 parser.add_argument('--in-file', type=str, default='../resources/variete.mp4')
 parser.add_argument('--out-file', type=str, default='../resources/face_variete.mp4')
 parser.add_argument('--ga-model', type=str, default='')
-parser.add_argument('--gpu', type=int, default=0)
+parser.add_argument('--gpu', type=int, default=-1)
 parser.add_argument('--det', type=int, default=0)
 parser.add_argument('--flip', type=int, default=0)
 parser.add_argument('--threshold', type=float, default=1.24)
 parser.add_argument('--threshold-face', type=float, default=0.4)
 parser.add_argument('--prepare', action='store_true', help='This is a boolean')
-parser.add_argument('--opt', action='store_true', help='Temporary flag to test optimisation')
+parser.add_argument('--recognize', action='store_true', help='Temporary flag to test only face identification')
 
 
 def hex2rgb(h):
@@ -73,45 +75,7 @@ def draw_names(frame, names):
     return frame
 
 
-def name_faces(args, frame, model, detector, dataset_features):
-    resolution = int(args.image_size.split(',')[0])
-    # run detector
-    results = detector.detect_face(frame)
-    if results is not None:
-        total_boxes = results[0]
-        points = results[1]
-        # extract aligned face chips
-        persons = detector.extract_image_chips(frame, points, resolution, 0.37)
-        faces_names = {}
-        unknown_faces = []
-        for person, box in zip(persons, total_boxes):
-            face = model.get_input(person)
-            if face is None:
-                continue
-            face = model.get_feature(face)
-            scores = {}
-            for known_id, known_features in dataset_features.items():
-                # minimum distance of all the features of a particular id
-                # dist = min([np.sum(np.square(feature - face)) for feature in known_features])
-                # maximum similarity
-                sim = max([np.dot(feature, face.T) for feature in known_features])
-                scores[known_id] = sim
-
-            if max(scores.values()) > args.threshold_face:
-                faces_names[max(scores, key=scores.get)] = box
-            else:
-                unknown_faces.append(box)
-
-        if len(unknown_faces):
-            faces_names['unknown'] = unknown_faces
-
-        return draw_names(frame, faces_names)
-
-    else:
-        return frame
-
-
-def opt_faces(args, frame, model, detector, ctx, names, dataset):
+def detect_faces(args, frame, model, detector, ctx, names, dataset):
     # type: (argparse.Namespace, np.ndarray, _, _, mx.context, dict, mx.ndarray) -> np.ndarray
     resolution = int(args.image_size.split(',')[0])
     # run detector
@@ -121,42 +85,50 @@ def opt_faces(args, frame, model, detector, ctx, names, dataset):
         points = results[1]
         # extract aligned face chips
         persons = detector.extract_image_chips(frame, points, resolution, 0.37)
-        faces_names = {}
-        unknown_faces = []
-        for person, box in zip(persons, total_boxes):
-            face = model.get_input(person)
-            if face is None:
-                continue
-            face = nd.array(model.get_feature(face), ctx=ctx)
-
-            # Calculate the similarity between the known features and the current face feature
-            sim = nd.dot(dataset, face)
-            scores = {}
-            for known_id, index in names.items():
-                scores[known_id] = max(sim[index]).asnumpy()
-
-            if max(scores.values()) > args.threshold_face:
-                faces_names[max(scores, key=scores.get)] = box
-            else:
-                unknown_faces.append(box)
-
-        if len(unknown_faces):
-            faces_names['unknown'] = unknown_faces
-
+        if args.recognize:
+            faces_names = name_faces(args, persons, total_boxes, model, ctx, names, dataset)
+        else:
+            faces_names = {'unknown': [box for box in total_boxes]}
         return draw_names(frame, faces_names)
 
     else:
         return frame
 
 
+def name_faces(args, persons, total_boxes, model, ctx, names, dataset):
+    faces_names = {}
+    unknown_faces = []
+    for person, box in zip(persons, total_boxes):
+        face = model.get_input(person)
+        if face is None:
+            continue
+        face = nd.array(model.get_feature(face), ctx=ctx)
+
+        # Calculate the similarity between the known features and the current face feature
+        sim = nd.dot(dataset, face)
+        scores = {}
+        for known_id, index in names.items():
+            scores[known_id] = max(sim[index]).asnumpy()
+
+        if max(scores.values()) > args.threshold_face:
+            faces_names[max(scores, key=scores.get)] = box
+        else:
+            unknown_faces.append(box)
+
+    if len(unknown_faces):
+        faces_names['unknown'] = unknown_faces
+
+    return faces_names
+
+
 if __name__ == '__main__':
     args = parser.parse_args()
-    if args.opt:
-        from mxnet import nd
+
     if args.gpu >= 0:
         print('Using gpu:{}'.format(args.gpu))
     else:
         print('Using cpu')
+
     ctx = mx.gpu(args.gpu) if args.gpu >= 0 else mx.cpu(0)
 
     model = face_model.FaceModel(args)
@@ -172,6 +144,7 @@ if __name__ == '__main__':
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         frame_w, frame_h = int(cap.get(3)), int(cap.get(4))  # Convert resolutions from float to integer.
         render = []
+
         #Load Dataset on numpy format
         np_dataset = load_features(args)
         #Create dictionary with person names and their corresponding feature index
@@ -181,22 +154,22 @@ if __name__ == '__main__':
             names[k] = slice(i, i+v.shape[0])
             i += v.shape[0]
 
-        if args.opt:
-            #Transform dataset to mx NDarray format
-            dataset_features = nd.array(np.concatenate([v for v in np_dataset.values()]), ctx=ctx)
-        else:
-            dataset_features = np_dataset
+        #Transform dataset to mx NDarray format
+        dataset_features = nd.array(np.concatenate([v for v in np_dataset.values()]), ctx=ctx)
+
+        frame_time = np.array([])
 
         print('Detecting Faces:')
         for _ in tqdm(range(total_frames)):
+            start = time()
             ret, frame = cap.read()
             if ret:
-                if args.opt:
-                    r = opt_faces(args, frame, model, detector, ctx, names, dataset_features)
-                else:
-                    r = name_faces(args, frame, model, detector, dataset_features)
+                r = name_faces(args, frame, model, detector, ctx, names, dataset_features)
                 render.append(r)
+            frame_time = np.append(frame_time, time()-start)
         cap.release()
+
+        print('Average execution time per frame: {}'.format(frame_time.mean()))
 
         out = cv2.VideoWriter(args.out_file, cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), 30, (frame_w, frame_h))
         for v in render:
