@@ -35,90 +35,120 @@ box_colors = ['a50104', '261c15', 'ff01fb', '2e1e0f', '003051', 'f18f01', '6e259
 box_colors = [hex2rgb(h) for h in box_colors]
 
 
-def prepare_faces(args, model, dataset_name='dataset.pkl'):
-    image_names = os.listdir(args.faces_dir)
-    face_names = set([x.split('_')[0] for x in image_names])
+class VideoDetector(object):
+    def __init__(self, arguments, mx_context):
+        self.args = arguments
+        self.ctx = mx_context
+        self.model = face_model.FaceModel(args)
+        self.detector = MtcnnDetector(model_folder='mtcnn-model/', ctx=self.ctx, num_worker=4, accurate_landmark=False)
+        self.names = None       # Names of the persons in the dataset
+        self.dataset = None     # Collection of features of known names
 
-    dataset = {}
-    for name in face_names:
-        images = [cv2.imread(os.path.join(args.faces_dir, iname)) for iname in image_names if name in iname]
-        features = [model.get_feature(model.get_input(img)) for img in images]
-        features = np.stack(features)
-        dataset[name] = features
+    def prepare_faces(self, dataset_name='dataset.pkl'):
+        image_names = os.listdir(self.args.faces_dir)
+        face_names = set([x.split('_')[0] for x in image_names])
 
-    dataset_path = os.path.abspath(os.path.join(args.faces_dir, '..'))
+        dataset = {}
+        for name in face_names:
+            images = [cv2.imread(os.path.join(self.args.faces_dir, iname)) for iname in image_names if name in iname]
+            features = [self.model.get_feature(self.model.get_input(img)) for img in images]
+            features = np.stack(features)
+            dataset[name] = features
 
-    with open(dataset_path + '/'+dataset_name, 'wb') as f:
-        pickle.dump(dataset, f, pickle.HIGHEST_PROTOCOL)
+        dataset_path = os.path.abspath(os.path.join(self.args.faces_dir, '..'))
 
+        with open(dataset_path + '/'+dataset_name, 'wb') as f:
+            pickle.dump(dataset, f, pickle.HIGHEST_PROTOCOL)
 
-def load_features(args, dataset_name='dataset.pkl'):
-    dataset_path = os.path.abspath(os.path.join(args.faces_dir, '..'))
-    with open(dataset_path + '/' + dataset_name, 'rb') as f:
-        dataset = pickle.load(f)
-    return dataset
+    def detect(self):
+        if self.dataset is None:
+            self.load_features()
+        cap = cv2.VideoCapture(args.in_file)  # Create a VideoCapture object
+        frame_w, frame_h = int(cap.get(3)), int(cap.get(4))  # Convert resolutions from float to integer.
 
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        renders = []
 
-def draw_names(frame, names):
-    # names: dict{'name' : bounding_box}
-    colors = box_colors[:len(names)]
+        frame_time = np.array([])
+        for _ in tqdm(range(total_frames)):
+            start = time()
+            ret, frame = cap.read()
+            if ret:
+                render = self.detect_faces(frame)
+                renders.append(render)
+            frame_time = np.append(frame_time, time() - start)
+        cap.release()
+        return renders, {'w': frame_w, 'h': frame_h}, {'fr_exec': frame_time.mean()}
 
-    for name, b, c in zip(names.keys(), names.values(), colors):
-        if name == 'unknown':
-            for x in b:
-                cv2.rectangle(frame, (int(x[0]), int(x[1])), (int(x[2]), int(x[3])), colors[-1], 2)
-                # cv2.putText(frame, 'unknown', (int(b[0]),int(b[1])), cv2.FONT_HERSHEY_COMPLEX_SMALL, 2, (255, 255, 255), 2, cv2.LINE_AA)
-        else:
-            cv2.rectangle(frame, (int(b[0]), int(b[1])), (int(b[2]), int(b[3])), c, 2)
-            cv2.putText(frame, name, (int(b[0]), int(b[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 3, cv2.LINE_AA)
+    def load_features(self, dataset_name='dataset.pkl'):
+        dataset_path = os.path.abspath(os.path.join(self.args.faces_dir, '..'))
+        with open(dataset_path + '/' + dataset_name, 'rb') as f: # Load Dataset on numpy format
+            np_dataset = pickle.load(f)
+        # Create dictionary with person names and their corresponding feature index
+        self.names = {}
+        i = 0
+        for k, v in np_dataset.items():
+            self.names[k] = slice(i, i + v.shape[0])
+            i += v.shape[0]
+        # Transform dataset to mx NDarray format
+        self.dataset = nd.array(np.concatenate([v for v in np_dataset.values()]), ctx=self.ctx)
 
-    return frame
-
-
-def name_faces(args, persons, total_boxes, model, ctx, names, dataset):
-    faces_names = {}
-    unknown_faces = []
-    for person, box in zip(persons, total_boxes):
-        face = model.get_input(person)
-        if face is None:
-            continue
-        face = nd.array(model.get_feature(face), ctx=ctx)
-
-        # Calculate the similarity between the known features and the current face feature
-        sim = nd.dot(dataset, face)
-        scores = {}
-        for known_id, index in names.items():
-            scores[known_id] = max(sim[index]).asnumpy()
-
-        if max(scores.values()) > args.threshold_face:
-            faces_names[max(scores, key=scores.get)] = box
-        else:
-            unknown_faces.append(box)
-
-    if len(unknown_faces):
-        faces_names['unknown'] = unknown_faces
-
-    return faces_names
-
-
-def detect_faces(args, frame, model, detector, ctx, names, dataset):
-    # type: (argparse.Namespace, np.ndarray, _, _, mx.context, dict, mx.ndarray) -> np.ndarray
-    resolution = int(args.image_size.split(',')[0])
-    # run detector
-    results = detector.detect_face(frame)
-    if results is not None:
-        total_boxes = results[0]
-        points = results[1]
-        # extract aligned face chips
-        persons = detector.extract_image_chips(frame, points, resolution, 0.37)
-        if args.recognize:
-            faces_names = name_faces(args, persons, total_boxes, model, ctx, names, dataset)
-        else:
-            faces_names = {'unknown': [box for box in total_boxes]}
-        return draw_names(frame, faces_names)
-
-    else:
+    def draw_names(self, frame, names):
+        # names: dict{'name' : bounding_box}
+        colors = box_colors[:len(names)]
+        for name, b, c in zip(names.keys(), names.values(), colors):
+            if name == 'unknown':
+                for x in b:
+                    cv2.rectangle(frame, (int(x[0]), int(x[1])), (int(x[2]), int(x[3])), colors[-1], 2)
+                    # cv2.putText(frame, 'unknown', (int(b[0]),int(b[1])), cv2.FONT_HERSHEY_COMPLEX_SMALL, 2, (255, 255, 255), 2, cv2.LINE_AA)
+            else:
+                cv2.rectangle(frame, (int(b[0]), int(b[1])), (int(b[2]), int(b[3])), c, 2)
+                cv2.putText(frame, name, (int(b[0]), int(b[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 3, cv2.LINE_AA)
         return frame
+
+    def name_faces(self, persons, total_boxes):
+        faces_names = {}
+        unknown_faces = []
+        for person, box in zip(persons, total_boxes):
+            face = self.model.get_input(person)
+            if face is None:
+                continue
+            face = nd.array(self.model.get_feature(face), ctx=self.ctx)
+
+            # Calculate the similarity between the known features and the current face feature
+            sim = nd.dot(self.dataset, face)
+            scores = {}
+            for known_id, index in self.names.items():
+                scores[known_id] = max(sim[index]).asnumpy()
+
+            if max(scores.values()) > self.args.threshold_face:
+                faces_names[max(scores, key=scores.get)] = box
+            else:
+                unknown_faces.append(box)
+
+        if len(unknown_faces):
+            faces_names['unknown'] = unknown_faces
+
+        return faces_names
+
+    def detect_faces(self, frame):
+        resolution = int(self.args.image_size.split(',')[0])
+        # run detector
+        results = self.detector.detect_face(frame)
+        if results is not None:
+            total_boxes = results[0]
+            points = results[1]
+            # extract aligned face chips
+            persons = self.detector.extract_image_chips(frame, points, resolution, 0.37)
+            if self.args.recognize:
+                faces_names = self.name_faces(persons, total_boxes)
+            else:
+                faces_names = {'unknown': [box for box in total_boxes]}
+            return self.draw_names(frame, faces_names)
+
+        else:
+            return frame
+
 
 if __name__ == '__main__':
     args = parser.parse_args()
@@ -129,53 +159,24 @@ if __name__ == '__main__':
         print('Using cpu')
 
     ctx = mx.gpu(args.gpu) if args.gpu >= 0 else mx.cpu(0)
+    vd = VideoDetector(args, ctx)
 
-    model = face_model.FaceModel(args)
     if args.prepare:
         print('Transforming images from: {}'.format(os.path.abspath(args.faces_dir)))
-        prepare_faces(args, model)
+        vd.prepare_faces()
         print('Features saved on:{}'.format(os.path.abspath(args.faces_dir+'../dataset.pkl')))
     else:
-        detector_path = 'mtcnn-model/'
-        detector = MtcnnDetector(model_folder=detector_path, ctx=ctx, num_worker=4, accurate_landmark=False)
-
-        cap = cv2.VideoCapture(args.in_file)  # Create a VideoCapture object
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        frame_w, frame_h = int(cap.get(3)), int(cap.get(4))  # Convert resolutions from float to integer.
-        render = []
-
-        #Load Dataset on numpy format
-        np_dataset = load_features(args)
-        #Create dictionary with person names and their corresponding feature index
-        names = {}
-        i = 0
-        for k, v in np_dataset.items():
-            names[k] = slice(i, i+v.shape[0])
-            i += v.shape[0]
-
-        #Transform dataset to mx NDarray format
-        dataset_features = nd.array(np.concatenate([v for v in np_dataset.values()]), ctx=ctx)
-
-        frame_time = np.array([])
-
+        # Draw square on detected faces, and verify each (optional)
         print('Detecting Faces:')
-        for _ in tqdm(range(total_frames)):
-            start = time()
-            ret, frame = cap.read()
-            if ret:
-                r = detect_faces(args, frame, model, detector, ctx, names, dataset_features)
-                render.append(r)
-            frame_time = np.append(frame_time, time()-start)
-        cap.release()
+        rendered_frames, frame_spec, measures = vd.detect()
 
-        print('Average execution time per frame: {}'.format(frame_time.mean()))
-
-        out = cv2.VideoWriter(args.out_file, cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), 30, (frame_w, frame_h))
-        for v in render:
+        # Export rendered frames to a video file
+        out = cv2.VideoWriter(args.out_file, cv2.VideoWriter_fourcc(*'mp4v'), 30, (frame_spec['w'], frame_spec['h']))
+        for v in rendered_frames:
             out.write(v)
         out.release()
         print('Video saved on:{}'.format(os.path.abspath(args.out_file)))
-
+        print('Average execution time per frame: %0.3f seg' % measures['fr_exec'])
 
 
 
