@@ -75,26 +75,6 @@ def draw_names(frame, names):
     return frame
 
 
-def detect_faces(args, frame, model, detector, ctx, names, dataset):
-    # type: (argparse.Namespace, np.ndarray, _, _, mx.context, dict, mx.ndarray) -> np.ndarray
-    resolution = int(args.image_size.split(',')[0])
-    # run detector
-    results = detector.detect_face(frame)
-    if results is not None:
-        total_boxes = results[0]
-        points = results[1]
-        # extract aligned face chips
-        persons = detector.extract_image_chips(frame, points, resolution, 0.37)
-        if args.recognize:
-            faces_names = name_faces(args, persons, total_boxes, model, ctx, names, dataset)
-        else:
-            faces_names = {'unknown': [box for box in total_boxes]}
-        return draw_names(frame, faces_names)
-
-    else:
-        return frame
-
-
 def name_faces(args, persons, total_boxes, model, ctx, names, dataset):
     faces_names = {}
     unknown_faces = []
@@ -120,6 +100,25 @@ def name_faces(args, persons, total_boxes, model, ctx, names, dataset):
 
     return faces_names
 
+
+def detect_faces(args, frame, model, detector, ctx, names, dataset):
+    # type: (argparse.Namespace, np.ndarray, _, _, mx.context, dict, mx.ndarray) -> np.ndarray
+    resolution = int(args.image_size.split(',')[0])
+    # run detector
+    results = detector.detect_face(frame)
+    if results is not None:
+        total_boxes = results[0]
+        points = results[1]
+        # extract aligned face chips
+        persons = detector.extract_image_chips(frame, points, resolution, 0.37)
+        if args.recognize:
+            faces_names = name_faces(args, persons, total_boxes, model, ctx, names, dataset)
+        else:
+            faces_names = {'unknown': [box for box in total_boxes]}
+        return draw_names(frame, faces_names)
+
+    else:
+        return frame
 
 if __name__ == '__main__':
     args = parser.parse_args()
@@ -164,7 +163,7 @@ if __name__ == '__main__':
             start = time()
             ret, frame = cap.read()
             if ret:
-                r = name_faces(args, frame, model, detector, ctx, names, dataset_features)
+                r = detect_faces(args, frame, model, detector, ctx, names, dataset_features)
                 render.append(r)
             frame_time = np.append(frame_time, time()-start)
         cap.release()
