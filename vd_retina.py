@@ -11,6 +11,7 @@ from tqdm import tqdm
 from time import time
 
 import face_model
+
 sys.path.append('../RetinaFace')
 from retinaface import RetinaFace
 
@@ -28,7 +29,7 @@ parser.add_argument('--flip', type=int, default=0)
 parser.add_argument('--threshold', type=float, default=0.9)
 parser.add_argument('--threshold-face', type=float, default=0.4)
 parser.add_argument('--prepare', action='store_true', help='This is a boolean')
-parser.add_argument('--recognize', action='store_true', help='Temporary flag to test only face identification')
+parser.add_argument('--pose', action='store_true', help='Temporary flag to test only face identification')
 
 
 def hex2rgb(h):
@@ -37,6 +38,7 @@ def hex2rgb(h):
 
 box_colors = ['a50104', '261c15', 'ff01fb', '2e1e0f', '003051', 'f18f01', '6e2594']
 box_colors = [hex2rgb(h) for h in box_colors]
+pose_titles = ['Ret', 'L', 'R', 'U', 'D']
 
 
 class VideoDetector(object):
@@ -46,8 +48,8 @@ class VideoDetector(object):
         self.model = face_model.FaceModel(args)
         rtpath, epoch = self.args.rt_model.split(',')
         self.detector = RetinaFace(rtpath, int(epoch), self.args.gpu, 'net3')
-        self.names = None       # Names of the persons in the dataset
-        self.dataset = None     # Collection of features of known names
+        self.names = None  # Names of the persons in the dataset
+        self.dataset = None  # Collection of features of known names
 
     def prepare_faces(self, dataset_name='dataset.pkl'):
         image_names = os.listdir(self.args.faces_dir)
@@ -62,7 +64,7 @@ class VideoDetector(object):
 
         dataset_path = os.path.abspath(os.path.join(self.args.faces_dir, '..'))
 
-        with open(dataset_path + '/'+dataset_name, 'wb') as f:
+        with open(dataset_path + '/' + dataset_name, 'wb') as f:
             pickle.dump(dataset, f, pickle.HIGHEST_PROTOCOL)
 
     def detect(self):
@@ -80,14 +82,15 @@ class VideoDetector(object):
             ret, frame = cap.read()
             if ret:
                 render = self.detect_faces(frame)
-                renders.append(render)
+                for _ in range(5):
+                    renders.append(render)
             frame_time = np.append(frame_time, time() - start)
         cap.release()
         return renders, {'w': frame_w, 'h': frame_h}, {'fr_exec': frame_time.mean()}
 
     def load_features(self, dataset_name='dataset.pkl'):
         dataset_path = os.path.abspath(os.path.join(self.args.faces_dir, '..'))
-        with open(dataset_path + '/' + dataset_name, 'rb') as f: # Load Dataset on numpy format
+        with open(dataset_path + '/' + dataset_name, 'rb') as f:  # Load Dataset on numpy format
             np_dataset = pickle.load(f)
         # Create dictionary with person names and their corresponding feature index
         self.names = {}
@@ -105,10 +108,32 @@ class VideoDetector(object):
             if name == 'unknown':
                 for x in b:
                     cv2.rectangle(frame, (int(x[0]), int(x[1])), (int(x[2]), int(x[3])), colors[-1], 2)
-                    # cv2.putText(frame, 'unknown', (int(b[0]),int(b[1])), cv2.FONT_HERSHEY_COMPLEX_SMALL, 2, (255, 255, 255), 2, cv2.LINE_AA)
             else:
                 cv2.rectangle(frame, (int(b[0]), int(b[1])), (int(b[2]), int(b[3])), c, 2)
-                cv2.putText(frame, name, (int(b[0]), int(b[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 3, cv2.LINE_AA)
+                cv2.putText(frame, name, (int(b[0]), int(b[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 3,
+                            cv2.LINE_AA)
+        return frame
+
+    def draw_pose(self, frame, points, bbox):
+        for i in range(bbox.shape[0]):
+            box = bbox[i].astype(np.int)
+            # color = (0, 0, 255)
+            # cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), color, 2)
+            if points is not None:
+                landmark5 = points[i].astype(np.int)
+                for l in range(landmark5.shape[0]):
+                    color = (0, 0, 255)
+                    if l == 0 or l == 3:
+                        color = (0, 255, 0)
+                    cv2.circle(frame, (landmark5[l][0], landmark5[l][1]), 1, color, 2)
+
+                poses = self.detector.check_large_pose(landmark5, box[1:])
+
+                y = 400
+                for t, vl in zip(pose_titles, poses):
+                    txt = str(t + ':' + str(vl)) if type(vl) == int else str(t + ':' + str(vl.round(2)))
+                    cv2.putText(frame, txt, (5, y), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 0), 2, cv2.LINE_AA)
+                    y += 60
         return frame
 
     def name_faces(self, persons, total_boxes):
@@ -143,13 +168,12 @@ class VideoDetector(object):
         if results is not None:
             total_boxes = results[0]
             points = results[1]
-            if self.args.recognize:
-                # extract aligned face chips
-                persons = self.detector.extract_image_chips(frame, points, resolution, 0.37)
-                faces_names = self.name_faces(persons, total_boxes)
+            if self.args.pose:
+                return self.draw_pose(frame, points, total_boxes)
+
             else:
                 faces_names = {'unknown': [box for box in total_boxes]}
-            return self.draw_names(frame, faces_names)
+                return self.draw_names(frame, faces_names)
 
         else:
             return frame
@@ -169,7 +193,7 @@ if __name__ == '__main__':
     if args.prepare:
         print('Transforming images from: {}'.format(os.path.abspath(args.faces_dir)))
         vd.prepare_faces()
-        print('Features saved on:{}'.format(os.path.abspath(args.faces_dir+'../dataset.pkl')))
+        print('Features saved on:{}'.format(os.path.abspath(args.faces_dir + '../dataset.pkl')))
     else:
         # Draw square on detected faces, and verify each (optional)
         print('Detecting Faces:')
@@ -182,6 +206,3 @@ if __name__ == '__main__':
         out.release()
         print('Video saved on:{}'.format(os.path.abspath(args.out_file)))
         print('Average execution time per frame: %0.3f seg' % measures['fr_exec'])
-
-
-

@@ -1,0 +1,15 @@
+#!/bin/bash
+if [ "$#" -lt 1 ]; then
+	echo "Arguments must be passed\n
+	1- Directory to store images\n
+	2- Length to cut video in seconds (optional)"
+	exit
+fi
+cd $1
+mkdir face_pose
+cd face_pose
+
+youtube-dl -f best  https://www.youtube.com/watch?v=h6vFeKK-Wec --output 'totrim.mp4'
+ffmpeg -i totrim.mp4 -ss 00:00:45 -t "00:00:04" -async 1 face.mp4
+rm totrim.mp4
+
