@@ -68,8 +68,8 @@ class VideoDetector(object):
             pickle.dump(dataset, f, pickle.HIGHEST_PROTOCOL)
 
     def detect(self):
-        if self.dataset is None:
-            self.load_features()
+        # if self.dataset is None:
+        #     self.load_features()
         cap = cv2.VideoCapture(self.args.in_file)  # Create a VideoCapture object
         frame_w, frame_h = int(cap.get(3)), int(cap.get(4))  # Convert resolutions from float to integer.
 
@@ -129,10 +129,10 @@ class VideoDetector(object):
 
                 poses = self.detector.check_large_pose(landmark5, box[1:])
 
-                y = 400
+                y = 450
                 for t, vl in zip(pose_titles, poses):
-                    txt = str(t + ':' + str(vl)) if type(vl) == int else str(t + ':' + str(vl.round(2)))
-                    cv2.putText(frame, txt, (5, y), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 0), 2, cv2.LINE_AA)
+                    txt = str(t + ':' + str(vl)) if type(vl) == int else str(t + ':' + str(np.round(vl, 2)))
+                    cv2.putText(frame, txt, (5, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 1, cv2.LINE_AA)
                     y += 60
         return frame
 
