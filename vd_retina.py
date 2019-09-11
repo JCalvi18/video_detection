@@ -229,7 +229,7 @@ class VideoDetector(object):
             distances = np.array([p.l2_distance(center) for p in self.persons for center in centers]).reshape(
                 len(self.persons), -1)
             known_index = np.where(distances >= 0, distances, np.inf).argmin(axis=1)
-            unknown_index = [i for i in range(distances.shape[-1]) if np.all(distances[:,i]==-1)]
+            unknown_index = [i for i in range(distances.shape[-1]) if np.all(distances[:, i] == -1)]
 
             # update known persons
             for ki, p in zip(known_index, self.persons):
@@ -249,19 +249,20 @@ class VideoDetector(object):
             centers = [p[2] for p in landmarks]
             distances = np.array([p.l2_distance(center) for p in self.persons for center in centers]).reshape(
                 len(self.persons), -1)
-            known_index = np.where(distances >= 0, distances, np.inf).argmin(axis=1)
-            d_index = []
-            for _ in range(len(self.persons)-bbox.shape[0]):
-                d = np.where(distances == np.max(distances))[0][0]
-                distances = np.delete(distances, d, axis=0)
-                d_index.append(d)
-            known_index = np.delete(known_index, d_index)
+            center_index = np.array([i for i in distances if np.any(i >= 0)])
+            if bbox.shape[0] > 1:
+                center_index = np.where(center_index >= 0, center_index, np.inf).argmin(axis=1)
+            else:
+                center_index = np.array([0])
+
+            known_person = np.where(distances >= 0, distances, np.inf).argmin(axis=0)
+            d_person = np.where(distances == -1, distances, np.inf).argmin(axis=0)
 
             # update known persons
-            for ki, p in zip(known_index, range(len(self.persons))):
-                self.name_person(frame, landmarks[ki], boxes[ki], person=self.persons[p])
+            for ci, ki in zip(center_index, known_person):
+                self.name_person(frame, landmarks[ci], boxes[ci], person=self.persons[ki])
             # delete disappeared persons from list
-            for d in d_index:
+            for d in d_person:
                 del self.persons[d]
 
     def detect_faces(self, frame):
