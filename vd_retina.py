@@ -26,8 +26,8 @@ parser.add_argument('--ga-model', type=str, default='')
 parser.add_argument('--gpu', type=int, default=-1)
 parser.add_argument('--det', type=int, default=0)
 parser.add_argument('--flip', type=int, default=0)
-parser.add_argument('--threshold', type=float, default=0.9, help='Threshold for retinaface, face detection')
-parser.add_argument('--threshold-face', type=float, default=0.4, help='Threshold for mtcnn face verification')
+parser.add_argument('--threshold', type=float, default=0.7, help='Threshold for retinaface, face detection')
+parser.add_argument('--threshold-face', type=float, default=0.2, help='Threshold for mtcnn face verification')
 parser.add_argument('--threshold-l2', type=float, default=200.0, help='Threshold for l2 distance')
 parser.add_argument('--prepare', action='store_true', help='Create the dataset based on the images of --faces_dir')
 parser.add_argument('--poses', type=str, default='1.2,1.2,2.0,3.0', help='LRUD')
@@ -187,20 +187,18 @@ class VideoDetector(object):
             person.pre_point = points[2]
             person.box = box
 
-        if person.known is not None:  # Check if the person has already been checked
+        if person.known:  # Check if the person has already been checked
             return
         # Obtain face orientation and if looking to the front take a screenshot
         ret, l, r, u, d = self.detector.check_large_pose(points, box[1:])
-        if not ret and l < self.pv[0] and r < self.pv[1] and u < self.pv[2] and d < self.pv[3]:
+        if ret != 4:
             points = np.array([np.concatenate([points[:, 0], points[:, 1]])])
-            cropped_face = self.model.detector.extract_image_chips(frame, points, self.crop_resolution, 0.37)[0]
+            cropped_face = self.model.detector.extract_image_chips(frame, points, self.crop_resolution, 1)[0]
             name = self.name_face(cropped_face)
             if name is not None:  # Face verified on the dataset
                 person.name = name
                 person.face = cropped_face
                 person.known = True
-            else:  # Face is not in dataset
-                person.known = False
 
         if person not in self.persons:
             self.persons.append(person)
@@ -213,8 +211,6 @@ class VideoDetector(object):
                 box = bbox[i].astype(np.int)
                 landmark5 = points[i].astype(np.int)
                 self.name_person(frame, landmark5, box)
-            landmark5 = points[-1].astype(np.int) + 20
-            self.name_person(frame, landmark5, box)
 
         elif len(self.persons) == bbox.shape[0]:  # Find corresponding person for each coordinate
             for i in range(bbox.shape[0]):
