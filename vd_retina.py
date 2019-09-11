@@ -26,11 +26,12 @@ parser.add_argument('--ga-model', type=str, default='')
 parser.add_argument('--gpu', type=int, default=-1)
 parser.add_argument('--det', type=int, default=0)
 parser.add_argument('--flip', type=int, default=0)
-parser.add_argument('--threshold', type=float, default=0.7, help='Threshold for retinaface, face detection')
-parser.add_argument('--threshold-face', type=float, default=0.2, help='Threshold for mtcnn face verification')
-parser.add_argument('--threshold-l2', type=float, default=200.0, help='Threshold for l2 distance')
+parser.add_argument('--threshold', type=float, default=0.8, help='Threshold for retinaface, face detection')
+parser.add_argument('--threshold-face', type=float, default=0.3, help='Threshold for mtcnn face verification')
+parser.add_argument('--threshold-l2', type=float, default=50.0, help='Threshold for l2 distance')
 parser.add_argument('--prepare', action='store_true', help='Create the dataset based on the images of --faces_dir')
 parser.add_argument('--poses', type=str, default='1.2,1.2,2.0,3.0', help='LRUD')
+
 
 def hex2rgb(h):
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
@@ -217,7 +218,7 @@ class VideoDetector(object):
                 box = bbox[i].astype(np.int)
                 landmark5 = points[i].astype(np.int)
                 distances = np.array([p.l2_distance(landmark5[2]) for p in self.persons])
-                person_index = np.where(distances > 0, distances, np.inf).argmin()
+                person_index = np.where(distances >= 0, distances, np.inf).argmin()
                 self.name_person(frame, landmark5, box, person=self.persons[person_index])
 
         elif len(self.persons) < bbox.shape[0]:  # Identify previous persons and add new ones
@@ -227,12 +228,12 @@ class VideoDetector(object):
             centers = [p[2] for p in landmarks]
             distances = np.array([p.l2_distance(center) for p in self.persons for center in centers]).reshape(
                 len(self.persons), -1)
-            known_index = np.where(distances > 0, distances, np.inf).argmin(axis=1)
-            unknown_index = np.nonzero(np.where(distances == -1, distances, 0)[0])[0]
+            known_index = np.where(distances >= 0, distances, np.inf).argmin(axis=1)
+            unknown_index = [i for i in range(distances.shape[-1]) if np.all(distances[:,i]==-1)]
 
             # update known persons
-            for ki, p in zip(known_index, range(len(self.persons))):
-                self.name_person(frame, landmarks[ki], boxes[ki], person=self.persons[p])
+            for ki, p in zip(known_index, self.persons):
+                self.name_person(frame, landmarks[ki], boxes[ki], person=p)
             # add unknown persons
             for uk in unknown_index:
                 self.name_person(frame, landmarks[uk], boxes[uk])
@@ -248,7 +249,7 @@ class VideoDetector(object):
             centers = [p[2] for p in landmarks]
             distances = np.array([p.l2_distance(center) for p in self.persons for center in centers]).reshape(
                 len(self.persons), -1)
-            known_index = np.where(distances > 0, distances, np.inf).argmin(axis=1)
+            known_index = np.where(distances >= 0, distances, np.inf).argmin(axis=1)
             d_index = []
             for _ in range(len(self.persons)-bbox.shape[0]):
                 d = np.where(distances == np.max(distances))[0][0]
