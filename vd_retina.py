@@ -258,12 +258,12 @@ class VideoDetector(object):
             else:
                 center_index = np.array([0])
 
-            known_person = np.where(distances >= 0, distances, np.inf).argmin(axis=0)
+            known_person = np.array([i for i in range(distances.shape[0]) if np.any(distances[i] >= 0)])
             d_person = [i for i in range(distances.shape[0]) if np.all(distances[i] == -1)]
 
             pre_points = [p.pre_point for p in self.persons]
             names = [p.name for p in self.persons]
-            
+
             print('DEBUG:')
             print('Names:{}'.format(names))
             print('Pre_p:{}'.format(pre_points))
