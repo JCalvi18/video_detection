@@ -98,7 +98,7 @@ class VideoDetector(object):
 
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         renders = []
-
+        i = 0
         frame_time = np.array([])
         for _ in tqdm(range(total_frames)):
             start = time()
@@ -107,6 +107,9 @@ class VideoDetector(object):
                 total_boxes, points = self.detect_faces(frame)
                 self.identify(frame, total_boxes, points)
                 render = self.draw_names(frame)
+                i += 1
+                if i == 22:
+                    pass
                 renders.append(render)
             frame_time = np.append(frame_time, time() - start)
         cap.release()
@@ -258,6 +261,13 @@ class VideoDetector(object):
             known_person = np.where(distances >= 0, distances, np.inf).argmin(axis=0)
             d_person = [i for i in range(distances.shape[0]) if np.all(distances[i] == -1)]
 
+            print('DEBUG:')
+            print('Pre_p'.format([p.pre_point for p in self.persons]))
+            print('Centers'.format(centers))
+            print('Known:{}'.format(known_person))
+            print('Center_i:{}'.format(center_index))
+            print('D_person:{}'.format(d_person))
+
             # update known persons
             for ci, ki in zip(center_index, known_person):
                 self.name_person(frame, landmarks[ci], boxes[ci], person=self.persons[ki])
@@ -295,7 +305,7 @@ if __name__ == '__main__':
         rendered_frames, frame_spec, measures = vd.detect()
 
         # Export rendered frames to a video file
-        out = cv2.VideoWriter(args.out_file, cv2.VideoWriter_fourcc(*'FMP4'), 30, (frame_spec['w'], frame_spec['h']))
+        out = cv2.VideoWriter(args.out_file, cv2.VideoWriter_fourcc(*'MJPG'), 30, (frame_spec['w'], frame_spec['h']))
         for v in rendered_frames:
             out.write(v)
         out.release()
