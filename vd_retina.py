@@ -256,7 +256,7 @@ class VideoDetector(object):
                 center_index = np.array([0])
 
             known_person = np.where(distances >= 0, distances, np.inf).argmin(axis=0)
-            d_person = np.where(distances == -1, distances, np.inf).argmin(axis=0)
+            d_person = [i for i in range(distances.shape[0]) if np.all(distances[i] == -1)]
 
             # update known persons
             for ci, ki in zip(center_index, known_person):
