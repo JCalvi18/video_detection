@@ -21,7 +21,7 @@ parser.add_argument('--faces-dir', type=str, default='../resources/faces')
 parser.add_argument('--model', type=str, default='../models/model-r100-ii/model,0')
 parser.add_argument('--rt-model', type=str, default='../models/retina/R50,0')
 parser.add_argument('--in-file', type=str, default='../resources/variete.mp4')
-parser.add_argument('--out-file', type=str, default='../resources/face_variete.mkv')
+parser.add_argument('--out-file', type=str, default='../resources/face_variete.mp4')
 parser.add_argument('--ga-model', type=str, default='')
 parser.add_argument('--gpu', type=int, default=-1)
 parser.add_argument('--det', type=int, default=0)
@@ -263,15 +263,7 @@ class VideoDetector(object):
 
             pre_points = [p.pre_point for p in self.persons]
             names = [p.name for p in self.persons]
-
-            print('DEBUG:')
-            print('Names:{}'.format(names))
-            print('Pre_p:{}'.format(pre_points))
-            print('Centers:{}'.format(centers))
-            print('Known:{}'.format(known_person))
-            print('Center_i:{}'.format(center_index))
-            print('D_person:{}'.format(d_person))
-
+            
             # update known persons
             for ci, ki in zip(center_index, known_person):
                 self.name_person(frame, landmarks[ci], boxes[ci], person=self.persons[ki])
@@ -309,7 +301,7 @@ if __name__ == '__main__':
         rendered_frames, frame_spec, measures = vd.detect()
 
         # Export rendered frames to a video file
-        out = cv2.VideoWriter(args.out_file, cv2.VideoWriter_fourcc(*'MJPG'), 30, (frame_spec['w'], frame_spec['h']))
+        out = cv2.VideoWriter(args.out_file, cv2.VideoWriter_fourcc(*'mp4v'), 30, (frame_spec['w'], frame_spec['h']))
         for v in rendered_frames:
             out.write(v)
         out.release()
