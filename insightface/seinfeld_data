@@ -1,0 +1,38 @@
+#!/bin/bash
+if [ "$#" -lt 1 ]; then
+	echo "Arguments must be passed\n
+	1- Directory to store images\n
+	2- Length to cut video in seconds (optional)"
+	exit
+fi
+cd $1
+mkdir seinfeld/ && mkdir seinfeld/imgs
+cd seinfeld/imgs
+#Get Jerry images
+wget http://jewel993.com/wp-content/uploads/Jerry-Seinfeld-imdbcom.jpg --output-document jerry_01.jpg
+wget https://cbsnews3.cbsistatic.com/hub/i/r/2013/05/14/da5d512c-c3c9-11e2-a43e-02911869d855/resize/620x465/f261781eeab9df4f0fbefb8b024e6654/002_Jerry_old.jpg --output-document jerry_02.jpg
+wget https://images-na.ssl-images-amazon.com/images/I/41QD3tyQ2bL.jpg --output-document jerry_03.jpg
+wget https://www.yenmag.net/wp-content/uploads/2016/11/Seinfeld-lead.jpg --output-document jerry_04.jpg
+# Get George images
+wget https://cdn-images-1.medium.com/max/773/1*fqHbkpxKYv-mJQOsgCAeTw.jpeg --output-document george_01.jpg
+wget https://i.blogs.es/2b8e3c/georgeconstanza/450_1000.jpg --output-document george_02.jpg
+wget https://vignette.wikia.nocookie.net/seinfeld/images/4/44/The_glasses.jpg/revision/latest?cb=20120909234627 --output-document george_03.jpg
+wget https://www.drjimtaylor.com/4.0/wp-content/uploads/2019/02/costanza-arm.jpg --output-document george_04.jpg
+#Get Kramer
+wget https://pbs.twimg.com/media/BLn7Lv-CYAACSpo.jpg --output-document kramer_01.jpg
+wget https://www.whitepages.com/wp-content/uploads/2014/05/Kramer.jpg --output-document kramer_02.jpg
+wget https://pbs.twimg.com/profile_images/464379153404665856/h5d5NcSj.jpeg --output-document kramer_03.jpg
+wget https://thumbs.gfycat.com/HardQuarterlyDogwoodtwigborer-mobile.jpg --output-document kramer_04.jpg
+#Get Elaine
+wget https://i.pinimg.com/originals/5a/eb/c9/5aebc9a1033f471bc2b06506757a1f82.jpg --output-document elaine_01.jpg
+wget http://www.charlottemagazine.com/Blogs/Charlotte-Shop-Talk/October-2011/Fashionable-Halloween/elaine-benes-picture.jpg --output-document elaine_02.jpg
+wget https://thecomedycrowd.com/wp-content/uploads/2017/11/elaine-benes.png --output-document elaine_03.jpg
+wget https://img.huffingtonpost.com/asset/5bb66da31f0000df0024c360.jpeg?ops=scalefit_720_noupscale --output-document elaine_04.jpg
+
+cd ..
+youtube-dl -f best https://www.youtube.com/watch?v=1Y_6fZGSOQI --output 'seinfeld.mp4'
+if [ "$#" -gt 1 ]; then
+	mv seinfeld.mp4 totrim.mp4
+	ffmpeg -i totrim.mp4 -ss 00:00:45 -t "00:00:$2" -async 1 seinfeld.mp4
+	rm totrim.mp4
+fi
