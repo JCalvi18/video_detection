@@ -3,6 +3,7 @@ import os
 import numpy as np
 import time
 import cv2
+from tqdm import tqdm
 from time import time
 import argparse
 CENTERNET_PATH_LIB = os.path.abspath('.')+'/lib'
@@ -68,7 +69,7 @@ class CTDET(object):
         cap = cv2.VideoCapture(args.in_file)  # Create a VideoCapture object
         total_time = np.array([])
         detection_time = np.array([])
-        for frame_count in range(self.total_frames):
+        for frame_count in tqdm(range(self.total_frames)):
             start = time()
             ret, frame = cap.read()
             if ret:
