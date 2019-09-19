@@ -33,7 +33,7 @@ def hex2rgb(h):
 
 video_ext = ['mp4', 'mov', 'avi', 'mkv']
 local_args = ['in_file', 'out_file', 'total_frames']
-box_colors = ['a50104', '261c15', 'ff01fb', '2e1e0f', '003051', 'f18f01', '6e2594', 'FFFFFF']
+box_colors = ['a50104', '327baa', 'ff01fb', '2e1e0f', '003051', 'f18f01', '6e2594', 'FFFFFF']
 box_colors = [hex2rgb(h) for h in box_colors]
 
 
@@ -83,9 +83,9 @@ class CTDET(object):
     def draw(self, i, frame, res, show_txt=True):
         for bbox in res[1]:  # only human
             if bbox[4] > self.opt.vis_thresh:
+                txt = '{}{.2f}'.format(self.names[0], bbox[4])
                 bbox = np.array(bbox, dtype=np.int32)
                 c = box_colors[1]
-                txt = '{}{.2f}'.format(self.names[0], bbox[4])
                 font = cv2.FONT_HERSHEY_SIMPLEX
                 cat_size = cv2.getTextSize(txt, font, 0.5, 2)[0]
                 cv2.rectangle(
