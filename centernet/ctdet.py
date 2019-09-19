@@ -24,6 +24,7 @@ parser.add_argument('--load-model', type=str, default='../models/ctdet_coco_dla_
 parser.add_argument('--gpus', type=int, default=-1, help='-1 CPU')
 parser.add_argument('--arch', type=str, default='dla_34', help='Type of architecture')
 parser.add_argument('--K', type=int, default=100, help='max number of output objects.')
+parser.add_argument('--vis_thresh', type=int, default=0.7, help='visualization threshold')
 # parser.add_argument('--bool', action='store_true', help='This is a boolean')
 
 
