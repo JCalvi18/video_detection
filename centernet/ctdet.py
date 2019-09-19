@@ -1,5 +1,7 @@
 import sys
 import os
+from typing import Dict, Any, Union
+
 import numpy as np
 import time
 import cv2
@@ -15,15 +17,35 @@ from opts import opts
 from utils.debugger import Debugger
 
 parser = argparse.ArgumentParser('Put title here')
-parser.add_argument('--model-path', type=str, default='../models/ctdet_coco_dla_2x.pth')
 parser.add_argument('--in-file', type=str, default='../exp/mini/variete.mp4', help='Input File')
 parser.add_argument('--out-file', type=str, default='../exp/mini/ctdet_variete.mp4', help='Input File')
 parser.add_argument('--total-frames', type=int, default=100, help='Number of frames to record, only used if in-file is a camera')
-parser.add_argument('--gpu', type=int, default=-1, help='-1 CPU')
+parser.add_argument('--load-model', type=str, default='../models/ctdet_coco_dla_2x.pth')
+parser.add_argument('--gpus', type=int, default=-1, help='-1 CPU')
 parser.add_argument('--arch', type=str, default='dla_34', help='Type of architecture')
+parser.add_argument('--K', type=int, default=100, help='max number of output objects.')
 # parser.add_argument('--bool', action='store_true', help='This is a boolean')
 
+
+def hex2rgb(h):
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
 video_ext = ['mp4', 'mov', 'avi', 'mkv']
+local_args = ['in_file', 'out_file', 'total_frames']
+box_colors = ['a50104', '261c15', 'ff01fb', '2e1e0f', '003051', 'f18f01', '6e2594', 'FFFFFF']
+box_colors = [hex2rgb(h) for h in box_colors]
+
+
+def opt_args(arg_dict):
+    d = [(k, v) for k, v in arg_dict.items() if k not in local_args]
+    for i in np.tile([1, 0], len(d)):
+        if i:
+            yield '--'+d[-1][0]
+        else:
+            aux = d[-1][1]
+            d.pop()
+            yield str(aux)
 
 
 class CTDET(object):
@@ -31,15 +53,16 @@ class CTDET(object):
         self.args = args
 
         # Initialize CenterNet argument parser
-        self.opt = opts().init('{} --load_model {} --gpus {} --arch {}'.format(TASK, args.model_path, args.gpu,
-                                                                               args.arch).split(' '))
+        oargs = [a for a in opt_args(vars(args))]
+        oargs.insert(0, TASK)
+        self.opt = opts().init(oargs)
 
         self.detector = detector_factory[self.opt.task](self.opt)
-        self.debugger = Debugger(dataset=self.opt.dataset, ipynb=True,theme=self.opt.debugger_theme)
 
         self.frame_w, self.frame_h = None, None
         self.total_frames = args.total_frames
 
+        self.names = ['Person']
         # prepare Input data
         ext = args.in_file.split('.')[-1].lower()
 
@@ -57,13 +80,22 @@ class CTDET(object):
         else:
             print('Video format not supported')
 
-    def draw(self, i, frame, res):
-        frame_id = TASK + '_frame' + str(i)
-        self.debugger.add_img(frame, img_id=frame_id)
-        for j in range(1, self.detector.num_classes + 1):
-            for bbox in res[j]:
-                if bbox[4] > self.opt.vis_thresh:
-                    self.debugger.add_coco_bbox(bbox[:4], j - 1, bbox[4], img_id=frame_id)
+    def draw(self, i, frame, res, show_txt=True):
+        for bbox in res[1]:  # only human
+            if bbox[4] > self.opt.vis_thresh:
+                bbox = np.array(bbox, dtype=np.int32)
+                c = box_colors[1]
+                txt = '{}'.format(self.names[0])
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                cat_size = cv2.getTextSize(txt, font, 0.5, 2)[0]
+                cv2.rectangle(
+                    frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), c, 2)
+                if show_txt:
+                    cv2.rectangle(frame,
+                                  (bbox[0], bbox[1] - cat_size[1] - 2),
+                                  (bbox[0] + cat_size[0], bbox[1] - 2), c, -1)
+                    cv2.putText(frame, txt, (bbox[0], bbox[1] - 2),
+                                font, 0.5, (0, 0, 0), thickness=1, lineType=cv2.LINE_AA)
 
     def detect(self):
         cap = cv2.VideoCapture(args.in_file)  # Create a VideoCapture object
@@ -78,26 +110,25 @@ class CTDET(object):
                 self.draw(frame_count, frame, detection)
                 detection_time = np.append(detection_time, results['tot'])
                 total_time = np.append(total_time, time() - start)
+                yield frame
         cap.release()
-        renders = [r for r in self.debugger.imgs.values()]
-        return renders, {'w': self.frame_w, 'h': self.frame_h, 'fps': self.fps}, {'fr_exec': total_time.mean(),
-                                                                                  'det_exec': detection_time.mean()}
+
+        yield {'fr_exec': total_time.mean(), 'det_exec': detection_time.mean()}
 
 
 if __name__ == '__main__':
     args = parser.parse_args()
     TASK = 'ctdet'  # For this program the task wil always be center detection
     ctdet = CTDET(args)
-    ctdet.detect()
-
-    rendered_frames, frame_spec, measures = ctdet.detect()
 
     # Export rendered frames to a video file
-    out = cv2.VideoWriter(args.out_file, cv2.VideoWriter_fourcc(*'mp4v'), frame_spec['fps'], (frame_spec['w'],
-                                                                                              frame_spec['h']))
-    for v in rendered_frames:
-        out.write(v)
-    out.release()
+    out = cv2.VideoWriter(args.out_file, cv2.VideoWriter_fourcc(*'mp4v'), ctdet.fps, (ctdet.frame_w, ctdet.frame_h))
+    for fr in ctdet.detect():
+        if type(fr) == np.ndarray:
+            out.write(fr)  # as a render frame
+        else:
+            out.release()
+            measures = fr  # as a result
     print('Video saved on:{}'.format(os.path.abspath(args.out_file)))
     print('Average execution time per frame: %0.3f seg' % measures['fr_exec'])
     print('Average execution time per detection: %0.3f seg' % measures['det_exec'])
