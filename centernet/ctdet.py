@@ -85,7 +85,7 @@ class CTDET(object):
             if bbox[4] > self.opt.vis_thresh:
                 bbox = np.array(bbox, dtype=np.int32)
                 c = box_colors[1]
-                txt = '{}'.format(self.names[0])
+                txt = '{}{.2f}'.format(self.names[0], bbox[4])
                 font = cv2.FONT_HERSHEY_SIMPLEX
                 cat_size = cv2.getTextSize(txt, font, 0.5, 2)[0]
                 cv2.rectangle(
