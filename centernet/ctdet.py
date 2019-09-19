@@ -83,7 +83,7 @@ class CTDET(object):
     def draw(self, i, frame, res, show_txt=True):
         for bbox in res[1]:  # only human
             if bbox[4] > self.opt.vis_thresh:
-                txt = '{}{.2f}'.format(self.names[0], bbox[4])
+                txt = '{}{:.2f}'.format(self.names[0], bbox[4])
                 bbox = np.array(bbox, dtype=np.int32)
                 c = box_colors[1]
                 font = cv2.FONT_HERSHEY_SIMPLEX
