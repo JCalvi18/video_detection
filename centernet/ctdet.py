@@ -158,7 +158,7 @@ class CTDET(object):
                 self.update_person(b)
 
         elif len(self.persons) == bbox.shape[0]:  # Find corresponding person for each coordinate
-            for b in bbox.shape[0]:
+            for b in bbox:
                 box = b.astype(np.int)
                 center_point = box_point(box)
                 distances = np.array([p.l2_distance(center_point) for p in self.persons])
