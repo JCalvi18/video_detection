@@ -200,8 +200,7 @@ class CTDET(object):
             for ci, ki in zip(center_index, known_person):
                 self.update_person(boxes[ci], person=self.persons[ki])
             # delete disappeared persons from list
-            for d in d_person:
-                del self.persons[d]
+            self.persons = [self.persons[d] for d in range(len(self.persons)) if d not in d_person]
 
     def detect(self):
         cap = cv2.VideoCapture(args.in_file)  # Create a VideoCapture object
