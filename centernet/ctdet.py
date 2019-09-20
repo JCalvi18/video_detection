@@ -81,27 +81,26 @@ class Person(object):
 
     def draw(self, frame, show_box=True, show_txt=True):
         bbox = self.box
-        if self.score > self.vis_thresh:
-            txt = '{}->{:.2f}'.format(self.name, self.score)
-            c = colors[1]
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            cat_size = cv2.getTextSize(txt, font, 0.5, 2)[0]
+        txt = '{}->{:.2f}'.format(self.name, self.score)
+        c = colors[1]
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        cat_size = cv2.getTextSize(txt, font, 0.5, 2)[0]
 
-            if show_box:
-                cv2.rectangle(
-                    frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), c, 2)
-            else:
-                cv2.circle(frame, (self.pre_point[0], bbox[1]), 5, colors[0], -1)
+        if show_box:
+            cv2.rectangle(
+                frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), c, 2)
+        else:
+            cv2.circle(frame, (self.pre_point[0], bbox[1]), 5, colors[0], -1)
 
-            if show_txt and show_box:
-                cv2.rectangle(frame,
-                              (bbox[0], bbox[1] - cat_size[1] - 2),
-                              (bbox[0] + cat_size[0], bbox[1] - 2), c, -1)
-                cv2.putText(frame, txt, (bbox[0], bbox[1] - 2),
-                            font, 0.5, (0, 0, 0), thickness=1, lineType=cv2.LINE_AA)
-            elif show_txt:
-                cv2.putText(frame, txt, (self.pre_point[0], bbox[1]-5),
-                            font, 0.5, (0, 0, 0), thickness=1, lineType=cv2.LINE_AA)
+        if show_txt and show_box:
+            cv2.rectangle(frame,
+                          (bbox[0], bbox[1] - cat_size[1] - 2),
+                          (bbox[0] + cat_size[0], bbox[1] - 2), c, -1)
+            cv2.putText(frame, txt, (bbox[0], bbox[1] - 2),
+                        font, 0.5, (0, 0, 0), thickness=1, lineType=cv2.LINE_AA)
+        elif show_txt:
+            cv2.putText(frame, txt, (self.pre_point[0], bbox[1]-5),
+                        font, 0.5, (0, 0, 0), thickness=1, lineType=cv2.LINE_AA)
 
 
 class CTDET(object):
@@ -118,7 +117,7 @@ class CTDET(object):
         self.total_frames = args.total_frames
         # Identification vars
         self.persons = []
-        self.names = ['Person_' + str(i) for i in reversed(range(7))]
+        self.names = ['Person_' + str(i) for i in reversed(range(10))]
 
         # prepare Input data
         ext = args.in_file.split('.')[-1].lower()
@@ -143,12 +142,13 @@ class CTDET(object):
 
     def update_person(self, box, person=None):
         if person is None:
-            person = Person(box, self.names[-1], args.l2_thresh, args.vis_thresh)
-            self.names.pop()
+            if box[4] >= args.vis_thresh:
+                person = Person(box, self.names[-1], args.l2_thresh, args.vis_thresh)
+                self.names.pop()
         else:
             person.update(box)
 
-        if person not in self.persons:
+        if person not in self.persons and person is not None:
             self.persons.append(person)
 
     def identify(self, det):
