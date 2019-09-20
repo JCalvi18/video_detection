@@ -142,9 +142,8 @@ class CTDET(object):
 
     def update_person(self, box, person=None):
         if person is None:
-            if box[4] >= args.vis_thresh:
-                person = Person(box, self.names[-1], args.l2_thresh, args.vis_thresh)
-                self.names.pop()
+            person = Person(box, self.names[-1], args.l2_thresh, args.vis_thresh)
+            self.names.pop()
         else:
             person.update(box)
 
@@ -152,21 +151,20 @@ class CTDET(object):
             self.persons.append(person)
 
     def identify(self, det):
-        bbox = det[1]  # Only persons
+        bbox = np.array([b for b in det[1] if b[4] > args.vis_thresh])  # Only persons with high socores
         if not self.persons and bbox.shape[0]:  # Check if persons list is empty and there are detected persons
             for b in bbox:
                 self.update_person(b)
 
         elif len(self.persons) == bbox.shape[0]:  # Find corresponding person for each coordinate
             for b in bbox:
-                box = b.astype(np.int)
-                center_point = box_point(box)
+                center_point = box_point(b)
                 distances = np.array([p.l2_distance(center_point) for p in self.persons])
                 person_index = np.where(distances >= 0, distances, np.inf).argmin()
-                self.update_person(box, person=self.persons[person_index])
+                self.update_person(b, person=self.persons[person_index])
 
         elif len(self.persons) < bbox.shape[0]:  # Identify previous persons and add new ones
-            boxes = [box for box in bbox.astype(np.int)]
+            boxes = [box for box in bbox]
             centers = [box_point(box) for box in bbox]
             distances = np.array([p.l2_distance(center) for p in self.persons for center in centers]).reshape(
                 len(self.persons), -1)
@@ -184,7 +182,7 @@ class CTDET(object):
                 del self.persons[:]  # Empty the hole list
                 return
             # Identify previous persons and remove the ones that disappeared
-            boxes = [box for box in bbox.astype(np.int)]
+            boxes = [box for box in bbox]
             centers = [box_point(box) for box in bbox]
 
             distances = np.array([p.l2_distance(center) for p in self.persons for center in centers]).reshape(
