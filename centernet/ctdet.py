@@ -167,7 +167,7 @@ class CTDET(object):
 
         elif len(self.persons) < bbox.shape[0]:  # Identify previous persons and add new ones
             boxes = [box for box in bbox.astype(np.int)]
-            centers = [box_point(box) for box in bbox.astyp(np.int)]
+            centers = [box_point(box) for box in bbox]
             distances = np.array([p.l2_distance(center) for p in self.persons for center in centers]).reshape(
                 len(self.persons), -1)
             known_index = np.where(distances >= 0, distances, np.inf).argmin(axis=1)
@@ -185,7 +185,7 @@ class CTDET(object):
                 return
             # Identify previous persons and remove the ones that disappeared
             boxes = [box for box in bbox.astype(np.int)]
-            centers = [box_point(box) for box in bbox.astyp(np.int)]
+            centers = [box_point(box) for box in bbox]
 
             distances = np.array([p.l2_distance(center) for p in self.persons for center in centers]).reshape(
                 len(self.persons), -1)
