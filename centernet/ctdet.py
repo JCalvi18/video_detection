@@ -202,12 +202,6 @@ class CTDET(object):
             for ci, ki in zip(center_index, known_person):
                 self.update_person(boxes[ci], person=self.persons[ki])
             # delete disappeared persons from list
-            print(centers)
-            print(distances)
-            print(center_index)
-            print(known_person)
-            print(d_person)
-            
             for d in d_person:
                 del self.persons[d]
 
@@ -215,7 +209,7 @@ class CTDET(object):
         cap = cv2.VideoCapture(args.in_file)  # Create a VideoCapture object
         total_time = np.array([])
         detection_time = np.array([])
-        renders=[]
+        renders = []
         for _ in tqdm(range(self.total_frames)):
             start = time()
             ret, frame = cap.read()
@@ -223,13 +217,13 @@ class CTDET(object):
                 results = self.detector.run(frame)
                 detection = results['results']
                 self.identify(detection)
-                self.draw(frame, show_box=False)
+                self.draw(frame, show_box=True)
                 detection_time = np.append(detection_time, results['tot'])
                 total_time = np.append(total_time, time() - start)
                 renders.append(frame)
         cap.release()
 
-        yield renders, {'fr_exec': total_time.mean(), 'det_exec': detection_time.mean()}
+        return renders, {'fr_exec': total_time.mean(), 'det_exec': detection_time.mean()}
 
 
 if __name__ == '__main__':
