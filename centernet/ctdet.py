@@ -202,6 +202,12 @@ class CTDET(object):
             for ci, ki in zip(center_index, known_person):
                 self.update_person(boxes[ci], person=self.persons[ki])
             # delete disappeared persons from list
+            print(centers)
+            print(distances)
+            print(center_index)
+            print(known_person)
+            print(d_person)
+            
             for d in d_person:
                 del self.persons[d]
 
@@ -209,6 +215,7 @@ class CTDET(object):
         cap = cv2.VideoCapture(args.in_file)  # Create a VideoCapture object
         total_time = np.array([])
         detection_time = np.array([])
+        renders=[]
         for _ in tqdm(range(self.total_frames)):
             start = time()
             ret, frame = cap.read()
@@ -219,10 +226,10 @@ class CTDET(object):
                 self.draw(frame, show_box=False)
                 detection_time = np.append(detection_time, results['tot'])
                 total_time = np.append(total_time, time() - start)
-                yield frame
+                renders.append(frame)
         cap.release()
 
-        yield {'fr_exec': total_time.mean(), 'det_exec': detection_time.mean()}
+        yield renders, {'fr_exec': total_time.mean(), 'det_exec': detection_time.mean()}
 
 
 if __name__ == '__main__':
@@ -230,14 +237,13 @@ if __name__ == '__main__':
     TASK = 'ctdet'  # For this program the task wil always be center detection
     ctdet = CTDET(args)
 
+    renders, measures = ctdet.detect()
     # Export rendered frames to a video file
     out = cv2.VideoWriter(args.out_file, cv2.VideoWriter_fourcc(*'mp4v'), ctdet.fps, (ctdet.frame_w, ctdet.frame_h))
-    for fr in ctdet.detect():
-        if type(fr) == np.ndarray:
-            out.write(fr)  # as a render frame
-        else:
-            out.release()
-            measures = fr  # as a result
+    for fr in renders:
+        out.write(fr)  # as a render frame
+    out.release()
+
     print('Video saved on:{}'.format(os.path.abspath(args.out_file)))
     print('Average execution time per frame: %0.3f seg' % measures['fr_exec'])
     print('Average execution time per detection: %0.3f seg' % measures['det_exec'])
