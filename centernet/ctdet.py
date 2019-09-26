@@ -124,7 +124,10 @@ class CTDET(object):
         self.opt = opts().init(oargs)
         # NN
         self.detector = detector_factory[self.opt.task](self.opt)
-        self.reid_detector = torchreid.models.build_model(name='osnet_ibn_x1_0', num_classes=1000, use_gpu=args.gpus >= 0)
+        if args.gpus >= 0:
+            self.reid_detector = torchreid.models.build_model(name='osnet_ibn_x1_0', num_classes=1000).cuda()
+        else:
+            self.reid_detector = torchreid.models.build_model(name='osnet_ibn_x1_0', num_classes=1000)
         self.reid_dist = torchreid.metrics.compute_distance_matrix
 
         # Video vars
@@ -158,7 +161,10 @@ class CTDET(object):
 
     def reid(self, frame, box, features_only=False):
         box = box[:, :-1].astype(np.int)
-        imgTensors = [torch.FloatTensor([frame[b[1]:b[3], b[0]:b[2], :]]).transpose(1, 3) for b in box]
+        if args.gpus >= 0:
+            imgTensors = [torch.FloatTensor([frame[b[1]:b[3], b[0]:b[2], :]]).transpose(1, 3).cuda() for b in box]
+        else:
+            imgTensors = [torch.FloatTensor([frame[b[1]:b[3], b[0]:b[2], :]]).transpose(1, 3) for b in box]
         self.reid_detector.eval()
         features = torch.cat([self.reid_detector(T) for T in imgTensors])
         if features.dim() == 1:
@@ -177,15 +183,14 @@ class CTDET(object):
 
     def identify(self, frame, det):
         bbox = np.array([b for b in det[1] if b[4] > args.vis_thresh])  # Only persons with high scores
-        if not self.persons and bbox.shape[0]:  # Check if persons list is empty and there are detected persons
+        active_persons = {i: p for i, p in enumerate(self.persons) if p.active}
+        if not active_persons and bbox.shape[0]:  # Check if persons list is empty and there are detected persons
             features = self.reid(frame, bbox, features_only=True)
             for b, f in zip(bbox, features):
                 self.create_person(frame, b, f)
             return
 
-        active_persons = {i: p for i, p in enumerate(self.persons) if p.active}
         dist_mat, features = self.reid(frame, bbox)
-
         if len(active_persons) == bbox.shape[0]:  # Same number of detections as persons
             for b, f in zip(bbox, features):
                 center_point = box_point(b)
