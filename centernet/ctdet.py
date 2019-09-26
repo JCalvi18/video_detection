@@ -173,7 +173,7 @@ class CTDET(object):
             return features
         known_features = torch.cat([p.feature.unsqueeze(0) for p in self.persons])
 
-        dm = self.reid_dist(features, known_features, 'cosine').detach().numpy()
+        dm = self.reid_dist(features, known_features, 'cosine').detach().cpu().numpy()
         return dm, features
 
     def create_person(self, frame, box, feature):
