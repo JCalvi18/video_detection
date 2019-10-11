@@ -37,6 +37,13 @@ def box_point(b):
     return [int(b[0]+((b[2]-b[0])/2)), int(b[1]+((b[3]-b[1])/2))]
 
 
+def deb(frame):
+    while True:
+        cv2.imshow('na', frame)
+        if cv2.waitKey(10) == 27:
+            break
+    cv2.destroyAllWindows()
+
 video_ext = ['mp4', 'mov', 'avi', 'mkv']
 local_args = ['in_file', 'out_file', 'total_frames', 'l2_thresh', 'show_points']
 colors = ['a50104', '327baa', 'ff01fb', '2e1e0f', '003051', 'f18f01', '6e2594', 'FFFFFF']
