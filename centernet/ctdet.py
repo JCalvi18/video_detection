@@ -25,6 +25,7 @@ parser.add_argument('--arch', type=str, default='dla_34', help='Type of architec
 parser.add_argument('--K', type=int, default=100, help='max number of output objects.')
 parser.add_argument('--vis-thresh', type=float, default=0.7, help='visualization threshold')
 parser.add_argument('--l2-thresh', type=float, default=50.0, help='Threshold for l2 distance')
+parser.add_argument('--img-wh', type=str, default='50,50', help='Minimum width and height for person images')
 parser.add_argument('--show-points', action='store_true', help='Show center points instead of boxes')
 
 
@@ -44,14 +45,15 @@ def deb(frame):
             break
     cv2.destroyAllWindows()
 
+
 video_ext = ['mp4', 'mov', 'avi', 'mkv']
-local_args = ['in_file', 'out_file', 'total_frames', 'l2_thresh', 'show_points']
+external_args = ['load_model', 'gpus', 'arch', 'K', 'vis_thresh']
 colors = ['a50104', '327baa', 'ff01fb', '2e1e0f', '003051', 'f18f01', '6e2594', 'FFFFFF']
 colors = [hex2rgb(h) for h in colors]
 
 
 def opt_args(arg_dict):
-    d = [(k, v) for k, v in arg_dict.items() if k not in local_args]
+    d = [(k, v) for k, v in arg_dict.items() if k in external_args]
     for i in np.tile([1, 0], len(d)):
         if i:
             yield '--'+d[-1][0]
@@ -62,26 +64,28 @@ def opt_args(arg_dict):
 
 
 class Person(object):
-    def __init__(self, box, name, l2_thresh, vis_thresh):
-        self.score = box[4]
-        box = np.array(box[:-1], dtype=np.int32)
+    def __init__(self, box, name, img, score):
         self.pre_point = box_point(box)  # Center point of the person
         self.box = box  # Bounding box
         self.name = name
-        self.l2_thresh = l2_thresh
-        self.vis_thresh = vis_thresh
+        self.active = True
+        self.img = np.array([]) if img is None else img
+        self.score = score
 
-    def update(self, box):
-        self.score = box[4]
-        box = np.array(box, dtype=np.int32)
+    def update(self, box, img, score, active=True):
         self.pre_point = box_point(box)  # Center point of the person
         self.box = box  # Bounding box
+        self.score = score
+        if not active:
+            self.active = False
+        if img is not None:
+            self.img = img
 
     def l2_distance(self, point):
         # Compare actual point with previous point
         # If l2 distance > l2 threshold return False else the value
         l2 = (((point[0] - self.pre_point[0]) ** 2) + ((point[1] - self.pre_point[1]) ** 2)) ** 0.5
-        if l2 > self.l2_thresh:
+        if l2 > args.l2_thresh:
             return -1
         else:
             return l2
@@ -124,7 +128,7 @@ class CTDET(object):
         self.total_frames = args.total_frames
         # Identification vars
         self.persons = []
-        self.names = ['Person_' + str(i) for i in reversed(range(10))]
+        self.names = ['Person_' + str(i) for i in reversed(range(100))]
 
         # prepare Input data
         ext = args.in_file.split('.')[-1].lower()
@@ -147,67 +151,37 @@ class CTDET(object):
         for person in self.persons:
             person.draw(frame, show_box=show_box, show_txt=show_txt)
 
-    def update_person(self, box, person=None):
+    def update_person(self, box, frame, person=None, active=True):
+        b = np.array(box[:-1], dtype=np.int32)
+        img = frame[b[1]:b[3], b[0]:b[2]]
+        if img.shape[0] > args.img_wh[1] and img.shape[1] > args.img_wh[0]:
+            img = None
         if person is None:
-            person = Person(box, self.names[-1], args.l2_thresh, args.vis_thresh)
+            person = Person(b, self.names[-1], img, box[-1])
             self.names.pop()
         else:
-            person.update(box)
+            person.update(b, img, box[-1], active=active)
 
         if person not in self.persons and person is not None:
             self.persons.append(person)
 
-    def identify(self, det):
-        bbox = np.array([b for b in det[1] if b[4] > args.vis_thresh])  # Only persons with high socores
+    def identify(self, det, frame):
+        bbox = np.array([b for b in det[1] if b[4] > args.vis_thresh])  # Only persons with high scores
         if not self.persons and bbox.shape[0]:  # Check if persons list is empty and there are detected persons
             for b in bbox:
-                self.update_person(b)
+                self.update_person(b, frame)
+            return
 
-        elif len(self.persons) == bbox.shape[0]:  # Find corresponding person for each coordinate
-            for b in bbox:
-                center_point = box_point(b)
-                distances = np.array([p.l2_distance(center_point) for p in self.persons])
-                person_index = np.where(distances >= 0, distances, np.inf).argmin()
-                self.update_person(b, person=self.persons[person_index])
-
-        elif len(self.persons) < bbox.shape[0]:  # Identify previous persons and add new ones
-            boxes = [box for box in bbox]
-            centers = [box_point(box) for box in bbox]
-            distances = np.array([p.l2_distance(center) for p in self.persons for center in centers]).reshape(
-                len(self.persons), -1)
-            known_index = np.where(distances >= 0, distances, np.inf).argmin(axis=1)
-            unknown_index = [i for i in range(distances.shape[-1]) if np.all(distances[:, i] == -1)]
-            # update known persons
-            for ki, p in zip(known_index, self.persons):
-                self.update_person(boxes[ki], person=p)
-            # add unknown persons
-            for uk in unknown_index:
-                self.update_person(boxes[uk])
-
-        elif len(self.persons) > bbox.shape[0]:
-            if not bbox.shape[0]:  # There is no faces detected
-                del self.persons[:]  # Empty the hole list
-                return
-            # Identify previous persons and remove the ones that disappeared
-            boxes = [box for box in bbox]
-            centers = [box_point(box) for box in bbox]
-
-            distances = np.array([p.l2_distance(center) for p in self.persons for center in centers]).reshape(
-                len(self.persons), -1)
-            center_index = np.array([i for i in distances if np.any(i >= 0)])
-            if bbox.shape[0] > 1:
-                center_index = np.where(center_index >= 0, center_index, np.inf).argmin(axis=1)
-            else:
-                center_index = np.array([0])
-
-            known_person = np.array([i for i in range(distances.shape[0]) if np.any(distances[i] >= 0)])
-            d_person = [i for i in range(distances.shape[0]) if np.all(distances[i] == -1)]
-
-            # update known persons
-            for ci, ki in zip(center_index, known_person):
-                self.update_person(boxes[ci], person=self.persons[ki])
-            # delete disappeared persons from list
-            self.persons = [self.persons[d] for d in range(len(self.persons)) if d not in d_person]
+        boxes = [box for box in bbox]
+        centers = [box_point(box) for box in bbox]
+        distances = np.array([p.l2_distance(center) for p in self.persons for center in centers]).reshape(
+            len(self.persons), -1).T  # rows-> centers, columns->persons
+        for c, p in enumerate(distances):  # Calculate person index for each center
+            if np.all(p < 0):
+                self.update_person(boxes[c], frame)  # Current person isn't close to any center
+            else:  # Add person closest to current center
+                p_id = np.where(p >= 0, c, np.inf).argmin()
+                self.update_person(boxes[c], frame, person=self.persons[p_id])
 
     def detect(self):
         cap = cv2.VideoCapture(args.in_file)  # Create a VideoCapture object
@@ -220,7 +194,7 @@ class CTDET(object):
             if ret:
                 results = self.detector.run(frame)
                 detection = results['results']
-                self.identify(detection)
+                self.identify(detection, frame)
                 self.draw(frame, show_box=True)
                 detection_time = np.append(detection_time, results['tot'])
                 total_time = np.append(total_time, time() - start)
@@ -232,6 +206,7 @@ class CTDET(object):
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    args.img_wh = [int(s) for s in args.img_wh.split(',')]
     TASK = 'ctdet'  # For this program the task wil always be center detection
     ctdet = CTDET(args)
 
