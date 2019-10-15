@@ -76,8 +76,7 @@ class Person(object):
         self.pre_point = box_point(box)  # Center point of the person
         self.box = box  # Bounding box
         self.score = score
-        if not active:
-            self.active = False
+        self.active = active
         if img is not None:
             self.img = img
 
@@ -148,7 +147,8 @@ class CTDET(object):
             print('Video format not supported')
 
     def draw(self, frame, show_box=True, show_txt=True):
-        for person in self.persons:
+        active_p = [p for p in self.persons if p.active]
+        for person in active_p:
             person.draw(frame, show_box=show_box, show_txt=show_txt)
 
     def update_person(self, box, frame, person=None, active=True):
@@ -172,15 +172,19 @@ class CTDET(object):
                 self.update_person(b, frame)
             return
 
+        for p in self.persons:
+            p.active = False
         boxes = [box for box in bbox]
         centers = [box_point(box) for box in bbox]
         distances = np.array([p.l2_distance(center) for p in self.persons for center in centers]).reshape(
             len(self.persons), -1).T  # rows-> centers, columns->persons
+        undetected_c = []
         for c, p in enumerate(distances):  # Calculate person index for each center
             if np.all(p < 0):
-                self.update_person(boxes[c], frame)  # Current person isn't close to any center
+                undetected_c.append(c)  # Current center doesn't match any person
+                self.update_person(boxes[c], frame)
             else:  # Add person closest to current center
-                p_id = np.where(p >= 0, c, np.inf).argmin()
+                p_id = np.where(p >= 0, p, np.inf).argmin()
                 self.update_person(boxes[c], frame, person=self.persons[p_id])
 
     def detect(self):
