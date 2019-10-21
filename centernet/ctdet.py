@@ -29,7 +29,7 @@ parser.add_argument('--arch', type=str, default='dla_34', help='Type of architec
 parser.add_argument('--K', type=int, default=100, help='max number of output objects.')
 parser.add_argument('--vis-thresh', type=float, default=0.7, help='visualization threshold')
 parser.add_argument('--l2-thresh', type=float, default=50.0, help='Threshold for l2 distance')
-parser.add_argument('--img-wh', type=str, default='50,50', help='Minimum width and height for person images')
+parser.add_argument('--img-wh', type=str, default='100,240', help='Minimum width and height for person images')
 parser.add_argument('--reid-thresh', type=float, default=0.2, help='Threshold for l2 distance')
 parser.add_argument('--show-points', action='store_true', help='Show center points instead of boxes')
 
@@ -43,6 +43,10 @@ def box_point(b):
     return [int(b[0]+((b[2]-b[0])/2)), int(b[1]+((b[3]-b[1])/2))]
 
 
+def box_wh(b):
+    return b[2] - b[0], b[3] - b[1]
+
+
 def deb(frame):
     while True:
         cv2.imshow('na', frame)
@@ -52,7 +56,6 @@ def deb(frame):
 
 
 video_ext = ['mp4', 'mov', 'avi', 'mkv']
-
 external_args = ['load_model', 'gpus', 'arch', 'K', 'vis_thresh']
 colors = ['a50104', '327baa', 'ff01fb', '2e1e0f', '003051', 'f18f01', '6e2594', 'FFFFFF']
 colors = [hex2rgb(h) for h in colors]
@@ -99,7 +102,7 @@ class Person(object):
         bbox = self.box
         # {:.2f}
         x, y = self.pre_point
-        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        w, h = box_wh(bbox)
         txt = '{}->x:{},y:{}->w{},h:{}'.format(self.name, x, y, w, h)
         c = colors[1]
         font = cv2.FONT_HERSHEY_SIMPLEX
@@ -184,7 +187,8 @@ class CTDET(object):
             self.persons.append(person)
 
     def identify(self, det, frame):
-        bbox = np.array([b for b in det[1] if b[4] > args.vis_thresh])  # Only persons with high scores
+        # Separate from detections only persons with high scores and enough height
+        bbox = np.array([b for b in det[1] if b[4] > args.vis_thresh and box_wh(b)[1] >= args.img_wh[1]])
         if not self.persons and bbox.shape[0]:  # Check if persons list is empty and there are detected persons
             for b in bbox:
                 self.update_person(b, frame)
