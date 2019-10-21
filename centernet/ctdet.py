@@ -1,6 +1,6 @@
 import sys
 import os
-from typing import Dict, Any, Union
+from typing import List, Any
 
 import numpy as np
 import time
@@ -8,12 +8,16 @@ import cv2
 from tqdm import tqdm
 from time import time
 import argparse
+import torch
+import torchreid
+
 CENTERNET_PATH_LIB = os.path.abspath('.')+'/lib'
 if CENTERNET_PATH_LIB not in sys.path: # ADD CenterNet to the python path
     sys.path.append(CENTERNET_PATH_LIB)
 
 from detectors.detector_factory import detector_factory
 from opts import opts
+
 
 parser = argparse.ArgumentParser('Put title here')
 parser.add_argument('--in-file', type=str, default='../exp/mini/variete.mp4', help='Input File')
@@ -26,6 +30,7 @@ parser.add_argument('--K', type=int, default=100, help='max number of output obj
 parser.add_argument('--vis-thresh', type=float, default=0.7, help='visualization threshold')
 parser.add_argument('--l2-thresh', type=float, default=50.0, help='Threshold for l2 distance')
 parser.add_argument('--img-wh', type=str, default='50,50', help='Minimum width and height for person images')
+parser.add_argument('--reid-thresh', type=float, default=0.2, help='Threshold for l2 distance')
 parser.add_argument('--show-points', action='store_true', help='Show center points instead of boxes')
 
 
@@ -47,7 +52,7 @@ def deb(frame):
 
 
 video_ext = ['mp4', 'mov', 'avi', 'mkv']
-external_args = ['load_model', 'gpus', 'arch', 'K', 'vis_thresh']
+local_args = ['in_file', 'out_file', 'total_frames', 'l2_thresh', 'reid_thresh', 'show_points']
 colors = ['a50104', '327baa', 'ff01fb', '2e1e0f', '003051', 'f18f01', '6e2594', 'FFFFFF']
 colors = [hex2rgb(h) for h in colors]
 
@@ -114,6 +119,8 @@ class Person(object):
 
 
 class CTDET(object):
+    persons: List[Person]
+
     def __init__(self, args):
         self.args = args
         # Initialize CenterNet argument parser
@@ -122,11 +129,18 @@ class CTDET(object):
         self.opt = opts().init(oargs)
         # NN
         self.detector = detector_factory[self.opt.task](self.opt)
+        if args.gpus >= 0:
+            self.reid_detector = torchreid.models.build_model(name='osnet_ibn_x1_0', num_classes=1000).cuda()
+        else:
+            self.reid_detector = torchreid.models.build_model(name='osnet_ibn_x1_0', num_classes=1000)
+        self.reid_dist = torchreid.metrics.compute_distance_matrix
+
         # Video vars
         self.frame_w, self.frame_h = None, None
         self.total_frames = args.total_frames
         # Identification vars
         self.persons = []
+
         self.names = ['Person_' + str(i) for i in reversed(range(100))]
 
         # prepare Input data
@@ -186,6 +200,23 @@ class CTDET(object):
             else:  # Add person closest to current center
                 p_id = np.where(p >= 0, p, np.inf).argmin()
                 self.update_person(boxes[c], frame, person=self.persons[p_id])
+
+    def reid(self, frame, box, features_only=False):
+        box = box[:, :-1].astype(np.int)
+        if args.gpus >= 0:
+            imgTensors = [torch.FloatTensor([frame[b[1]:b[3], b[0]:b[2], :]]).transpose(1, 3).cuda() for b in box]
+        else:
+            imgTensors = [torch.FloatTensor([frame[b[1]:b[3], b[0]:b[2], :]]).transpose(1, 3) for b in box]
+        self.reid_detector.eval()
+        features = torch.cat([self.reid_detector(T) for T in imgTensors])
+        if features.dim() == 1:
+            features = features.unsqueeze(0)
+        if features_only:
+            return features
+        known_features = torch.cat([p.feature.unsqueeze(0) for p in self.persons])
+
+        dm = self.reid_dist(features, known_features, 'cosine').detach().cpu().numpy()
+        return dm, features
 
     def detect(self):
         cap = cv2.VideoCapture(args.in_file)  # Create a VideoCapture object
