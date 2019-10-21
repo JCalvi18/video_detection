@@ -52,7 +52,8 @@ def deb(frame):
 
 
 video_ext = ['mp4', 'mov', 'avi', 'mkv']
-local_args = ['in_file', 'out_file', 'total_frames', 'l2_thresh', 'reid_thresh', 'show_points']
+
+external_args = ['load_model', 'gpus', 'arch', 'K', 'vis_thresh']
 colors = ['a50104', '327baa', 'ff01fb', '2e1e0f', '003051', 'f18f01', '6e2594', 'FFFFFF']
 colors = [hex2rgb(h) for h in colors]
 
@@ -96,7 +97,10 @@ class Person(object):
 
     def draw(self, frame, show_box=True, show_txt=True):
         bbox = self.box
-        txt = '{}->{:.2f}'.format(self.name, self.score)
+        # {:.2f}
+        x, y = self.pre_point
+        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        txt = '{}->x:{},y:{}->w{},h:{}'.format(self.name, x, y, w, h)
         c = colors[1]
         font = cv2.FONT_HERSHEY_SIMPLEX
         cat_size = cv2.getTextSize(txt, font, 0.5, 2)[0]
@@ -141,7 +145,7 @@ class CTDET(object):
         # Identification vars
         self.persons = []
 
-        self.names = ['Person_' + str(i) for i in reversed(range(100))]
+        self.names = ['P' + str(i) for i in reversed(range(100))]
 
         # prepare Input data
         ext = args.in_file.split('.')[-1].lower()
