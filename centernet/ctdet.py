@@ -29,8 +29,9 @@ parser.add_argument('--arch', type=str, default='dla_34', help='Type of architec
 parser.add_argument('--K', type=int, default=100, help='max number of output objects.')
 parser.add_argument('--vis-thresh', type=float, default=0.7, help='visualization threshold')
 parser.add_argument('--l2-thresh', type=float, default=50.0, help='Threshold for l2 distance')
-parser.add_argument('--img-wh', type=str, default='100,240', help='Minimum width and height for person images')
+parser.add_argument('--img-wh', type=str, default='70,240', help='Minimum width and height for person images')
 parser.add_argument('--reid-thresh', type=float, default=0.2, help='Threshold for l2 distance')
+parser.add_argument('--xstrip', type=str, default='250,1036', help='Right (exit), Left (entrance) points')
 parser.add_argument('--show-points', action='store_true', help='Show center points instead of boxes')
 
 
@@ -175,7 +176,7 @@ class CTDET(object):
     def update_person(self, box, frame, person=None, active=True):
         b = np.array(box[:-1], dtype=np.int32)
         img = frame[b[1]:b[3], b[0]:b[2]]
-        if img.shape[0] > args.img_wh[1] and img.shape[1] > args.img_wh[0]:
+        if img.shape[0] < args.img_wh[1] and img.shape[1] < args.img_wh[0]:
             img = None
         if person is None:
             person = Person(b, self.names[-1], img, box[-1])
@@ -197,7 +198,13 @@ class CTDET(object):
         for p in self.persons:
             p.active = False
         boxes = [box for box in bbox]
-        centers = [box_point(box) for box in bbox]
+        centers = np.array([box_point(box) for box in bbox])
+        if np.any(centers[:, 0] < args.xstrip[0]) or np.any(centers[:, 0] > args.xstrip[1]):
+            p_id = self.reid(frame, bbox[:, :-1].astype(np.int))
+            for c, p in enumerate(p_id):
+                self.update_person(boxes[c], frame, person=self.persons[p])
+            return 
+        # Use l2 criteria
         distances = np.array([p.l2_distance(center) for p in self.persons for center in centers]).reshape(
             len(self.persons), -1).T  # rows-> centers, columns->persons
         undetected_c = []
@@ -209,22 +216,26 @@ class CTDET(object):
                 p_id = np.where(p >= 0, p, np.inf).argmin()
                 self.update_person(boxes[c], frame, person=self.persons[p_id])
 
-    def reid(self, frame, box, features_only=False):
-        box = box[:, :-1].astype(np.int)
+    def reid(self, frame, box):
         if args.gpus >= 0:
-            imgTensors = [torch.FloatTensor([frame[b[1]:b[3], b[0]:b[2], :]]).transpose(1, 3).cuda() for b in box]
+            ukImg = [torch.FloatTensor([frame[b[1]:b[3], b[0]:b[2], :]]).transpose(1, 3).cuda() for b in box]
+            kImg = [torch.FloatTensor([p.img]).transpose(1, 3).cuda() for p in self.persons]
         else:
-            imgTensors = [torch.FloatTensor([frame[b[1]:b[3], b[0]:b[2], :]]).transpose(1, 3) for b in box]
-        self.reid_detector.eval()
-        features = torch.cat([self.reid_detector(T) for T in imgTensors])
-        if features.dim() == 1:
-            features = features.unsqueeze(0)
-        if features_only:
-            return features
-        known_features = torch.cat([p.feature.unsqueeze(0) for p in self.persons])
+            ukImg = [torch.FloatTensor([frame[b[1]:b[3], b[0]:b[2], :]]).transpose(1, 3) for b in box]
+            kImg = [torch.FloatTensor([p.img]).transpose(1, 3) for p in self.persons]
 
-        dm = self.reid_dist(features, known_features, 'cosine').detach().cpu().numpy()
-        return dm, features
+        self.reid_detector.eval()
+        ukFeatures = torch.cat([self.reid_detector(T) for T in ukImg])
+        kFeatures = torch.cat([self.reid_detector(T) for T in kImg])
+
+        if ukFeatures.dim() == 1:
+            ukFeatures = ukFeatures.unsqueeze(0)
+
+        if kFeatures.dim() == 1:
+            kFeatures = kFeatures.unsqueeze(0)
+
+        dm = self.reid_dist(ukFeatures, kFeatures, 'cosine').detach().cpu().numpy()
+        return [x.argmin() for x in dm]
 
     def detect(self):
         cap = cv2.VideoCapture(args.in_file)  # Create a VideoCapture object
@@ -250,6 +261,7 @@ class CTDET(object):
 if __name__ == '__main__':
     args = parser.parse_args()
     args.img_wh = [int(s) for s in args.img_wh.split(',')]
+    args.xstrip = [int(s) for s in args.xstrip.split(',')]
     TASK = 'ctdet'  # For this program the task wil always be center detection
     ctdet = CTDET(args)
 
