@@ -199,11 +199,15 @@ class CTDET(object):
             p.active = False
         boxes = [box for box in bbox]
         centers = np.array([box_point(box) for box in bbox])
-        if np.any(centers[:, 0] < args.xstrip[0]) or np.any(centers[:, 0] > args.xstrip[1]):
+        try:
+            on_strip = True if np.any(centers[:, 0] < args.xstrip[0]) or np.any(centers[:, 0] > args.xstrip[1]) else False
+        except IndexError:
+            on_strip = True if np.any(centers[0] < args.xstrip[0]) or np.any(centers[0] > args.xstrip[1]) else False
+        if on_strip:
             p_id = self.reid(frame, bbox[:, :-1].astype(np.int))
             for c, p in enumerate(p_id):
                 self.update_person(boxes[c], frame, person=self.persons[p])
-            return 
+            return
         # Use l2 criteria
         distances = np.array([p.l2_distance(center) for p in self.persons for center in centers]).reshape(
             len(self.persons), -1).T  # rows-> centers, columns->persons
