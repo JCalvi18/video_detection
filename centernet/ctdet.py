@@ -190,6 +190,9 @@ class CTDET(object):
     def identify(self, det, frame):
         # Separate from detections only persons with high scores and enough height
         bbox = np.array([b for b in det[1] if b[4] > args.vis_thresh and box_wh(b)[1] >= args.img_wh[1]])
+        if not bbox.size:
+            return
+
         if not self.persons and bbox.shape[0]:  # Check if persons list is empty and there are detected persons
             for b in bbox:
                 self.update_person(b, frame)
