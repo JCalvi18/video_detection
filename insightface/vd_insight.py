@@ -57,7 +57,7 @@ class VideoDetector(object):
         self.dataset = None  # Collection of features of known names
         self.names = {}  # Names of known person
         self.persons = []  # List of person detected
-        self.det_model = model_zoo.get_model('retinaface_r50_v1')
+        self.det_model = model_zoo.get_model('retinaface_mnet025_v2')
         self.rec_model = model_zoo.get_model('arcface_r100_v1')
         self.det_model.prepare(args.gpu)
         self.rec_model.prepare(args.gpu)
