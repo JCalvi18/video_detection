@@ -12,7 +12,7 @@ parser.add_argument('--gpu', type=int, default=-1)
 
 
 def video_get(detector, nframes=60):
-    cap = cv2.VideoCapture(args.infile)  # Create a VideoCapture object
+    cap = cv2.VideoCapture(args.in_file)  # Create a VideoCapture object
     total_frames = nframes
     frame_time = np.array([])
     faces_detected = 0
