@@ -29,9 +29,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     models = ['retinaface_r50_v1', 'retinaface_mnet025_v1', 'retinaface_mnet025_v2']
     for m in models:
-        in_det = model_zoo.get_model('retinaface_r50_v1')
+        in_det = model_zoo.get_model(m)
         in_det.prepare(args.gpu)
-
         fr_time, nfaces = video_get(in_det)
         del in_det
         print('%s:\nAverage time per frame: %0.3f\nNumber of faces: %i' % (m, fr_time, nfaces))
