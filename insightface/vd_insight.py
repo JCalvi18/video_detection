@@ -90,7 +90,6 @@ class VideoDetector(object):
 
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         renders = []
-        i = 0
         frame_time = np.array([])
         for _ in tqdm(range(total_frames)):
             start = time()
@@ -99,9 +98,6 @@ class VideoDetector(object):
                 total_boxes, points = self.detect_faces(frame)
                 self.identify(frame, total_boxes, points)
                 render = self.draw_names(frame)
-                i += 1
-                if i == 22:
-                    pass
                 renders.append(render)
             frame_time = np.append(frame_time, time() - start)
         cap.release()
