@@ -23,7 +23,7 @@ def video_get(detector, nframes=60):
             if detector is not None:
                 boxes = detector.detect(frame, threshold=0.6)[0]
             else:
-                boxes = fr.face_locations(frame, model='cnn')
+                boxes = np.array(fr.face_locations(frame, model='cnn'))
             faces_detected += boxes.shape[0]
         frame_time = np.append(frame_time, time() - start)
     cap.release()
