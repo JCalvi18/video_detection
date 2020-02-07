@@ -9,6 +9,7 @@ import argparse
 parser = argparse.ArgumentParser('Test 1: dlib vs Insight in detection')
 parser.add_argument('--in-file', type=str, default='database/variete.mp4')
 parser.add_argument('--gpu', type=int, default=-1)
+parser.add_argument('--upsample', type=int, default=1)
 
 
 def video_get(detector, nframes=60):
@@ -16,14 +17,14 @@ def video_get(detector, nframes=60):
     total_frames = nframes
     frame_time = np.array([])
     faces_detected = 0
-    for _ in tqdm(range(total_frames)):
+    for _ in range(total_frames):
         start = time()
         ret, frame = cap.read()
         if ret:
             if detector is not None:
                 boxes = detector.detect(frame, threshold=0.6)[0]
             else:
-                boxes = np.array(fr.face_locations(frame, model='cnn'))
+                boxes = np.array(fr.face_locations(frame, number_of_times_to_upsample=args.upsample, model='cnn'))
             faces_detected += boxes.shape[0]
         frame_time = np.append(frame_time, time() - start)
     cap.release()
