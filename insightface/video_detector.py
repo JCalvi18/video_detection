@@ -41,16 +41,17 @@ class Person(object):
 
 
 class VideoDetector(object):
-    def __init__(self, mx_context, args):
+    def __init__(self, mx_context, args, batched = False):
         self.ctx = mx_context
         self.args = args
         self.dataset = None  # Collection of features of known names
         self.names = {}  # Names of known person
         self.persons = []  # List of person detected
-        self.det_model = model_zoo.get_model('retinaface_mnet025_v2')
         self.rec_model = model_zoo.get_model('arcface_r100_v1')
-        self.det_model.prepare(self.args.gpu)
         self.rec_model.prepare(self.args.gpu)
+        if not batched:
+            self.det_model = model_zoo.get_model('retinaface_mnet025_v2')
+            self.det_model.prepare(self.args.gpu)
 
     def prepare_faces(self, dataset_name='dataset.pkl'):
         image_names = os.listdir(self.args.faces_dir)

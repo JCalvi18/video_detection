@@ -14,9 +14,6 @@ from tqdm import tqdm
 from time import time
 import pickle
 import cv2
-import logging
-logging.basicConfig(level=logging.DEBUG,
-                    format='(%(threadName)-9s) %(message)s',)
 
 
 def call_with_future(fn, future, arg, kwargs):
@@ -174,25 +171,16 @@ def get_retinaface(name, rac='net3l', root='~/.insightface/models'):
     return Detector(_file, rac)
 
 
-class ThreadedVideoDetector(VideoDetector):
+class BatchedVideoDetector(VideoDetector):
     # detect_faces = threaded(VideoDetector.detect_faces)
 
-    def __init__(self, args):
-        # super().__init__(mx_context, args)
-        self.args = args
-        # self.ctx = mx.cpu()
-        self.ctx = mx.gpu(args.gpu) if args.gpu >= 0 else mx.cpu(0)
-        self.dataset = None  # Collection of features of known names
-        self.names = {}  # Names of known person
-        self.persons = []  # List of person detected
+    def __init__(self, mx_context, args):
+        super().__init__(mx_context, args, batched=True)
         self.det_model = get_retinaface('mnet025_v2')
-        self.rec_model = model_zoo.get_model('arcface_r100_v1')
         if self.args.gpu < 0:
             self.det_model.prepare(-1)
-            self.rec_model.prepare(-1)
         else:
             self.det_model.prepare(self.args.gpu)
-            self.rec_model.prepare(self.args.gpu)
         self.renders = []
 
     def detect(self):

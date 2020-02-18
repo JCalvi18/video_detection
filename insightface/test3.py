@@ -1,8 +1,9 @@
 from __future__ import division
 import cv2
 import argparse
-from test_utils import ThreadedVideoDetector
+from test_utils import BatchedVideoDetector
 import os
+import mxnet as mx
 
 parser = argparse.ArgumentParser('Test 3: Insightface using batches on threaded subprocess')
 parser.add_argument('--faces-dir', type=str, default='database/faces')
@@ -24,7 +25,8 @@ if __name__ == '__main__':
     else:
         print('Using cpu')
 
-    vd = ThreadedVideoDetector(args)
+    ctx = mx.gpu(args.gpu) if args.gpu >= 0 else mx.cpu(0)
+    vd = BatchedVideoDetector(ctx, args)
 
     if args.prepare:
         print('Transforming images from: {}'.format(os.path.abspath(args.faces_dir)))
