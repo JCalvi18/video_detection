@@ -177,7 +177,7 @@ def get_retinaface(name, rac='net3l', root='~/.insightface/models'):
 class ThreadedVideoDetector(VideoDetector):
     # detect_faces = threaded(VideoDetector.detect_faces)
 
-    def __init__(self, mx_context, args):
+    def __init__(self, args):
         # super().__init__(mx_context, args)
         self.args = args
         # self.ctx = mx.cpu()
