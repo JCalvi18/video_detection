@@ -177,8 +177,8 @@ def get_retinaface(name, rac='net3l', root='~/.insightface/models'):
 class ThreadedVideoDetector(VideoDetector):
     # detect_faces = threaded(VideoDetector.detect_faces)
 
-    def __init__(self, args):
-        # super().__init__(mx_context)
+    def __init__(self, mx_context, args):
+        # super().__init__(mx_context, args)
         self.args = args
         # self.ctx = mx.cpu()
         self.ctx = mx.gpu(args.gpu) if args.gpu >= 0 else mx.cpu(0)
@@ -190,12 +190,9 @@ class ThreadedVideoDetector(VideoDetector):
         if self.args.gpu < 0:
             self.det_model.prepare(-1)
             self.rec_model.prepare(-1)
-        elif self.args.prepare:
-            self.det_model.prepare(self.args.gpu)
-            self.rec_model.prepare(self.args.gpu)
         else:
             self.det_model.prepare(self.args.gpu)
-            self.rec_model.prepare(-1)
+            self.rec_model.prepare(self.args.gpu)
         self.renders = []
 
     def detect(self):
@@ -241,8 +238,7 @@ class ThreadedVideoDetector(VideoDetector):
 
     # @no_return_thread
     def buffered_identify(self, frames, total_boxes, points):
-        for frame, box, point,b in zip(frames, total_boxes, points, range(self.args.batch_size)):
-            # logging.debug('Batch %i' % b)
+        for frame, box, point in zip(frames, total_boxes, points):
             self.identify(frame, box, point)
             render = self.draw_names(frames)
             self.renders.append(render)
